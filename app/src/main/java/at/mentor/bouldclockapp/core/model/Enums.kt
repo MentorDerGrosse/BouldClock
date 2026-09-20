@@ -34,6 +34,19 @@ enum class SessionType(
      * ist mit einer Limit-Session nicht ohne Weiteres vergleichbar.
      */
     CUSTOM("Benutzerdefiniert", 3 * 60_000L),
+
+    /**
+     * Wettkampf. Bewusst anders gebaut als der Rest: keine Grade, kein
+     * Pausenziel, kein Zwischenschritt. Wettkampfformate sehen jedes Mal anders
+     * aus, deshalb konfiguriert der Modus nichts - er zaehlt nur mit.
+     *
+     * Der Wert hier wird nie angezeigt; die Pause ist im Wettkampf uninteressant.
+     */
+    COMPETITION("Wettkampf", 4 * 60_000L),
+    ;
+
+    /** Laeuft ohne Gradabfrage und ohne Pausenziel. */
+    val isCompetition: Boolean get() = this == COMPETITION
 }
 
 enum class SessionState {

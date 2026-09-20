@@ -51,6 +51,16 @@ data class AttemptEntity(
     /** Fortlaufend ab 1 innerhalb der Session. */
     val ordinal: Int,
 
+    /**
+     * Beginnt mit diesem Versuch ein neuer Boulder?
+     *
+     * Ersetzt das Raten anhand gleicher Grade. Gesetzt wird es automatisch -
+     * nach einem Top faengt zwangslaeufig ein neuer Boulder an, ebenso bei einem
+     * anderen Grad - und nur im mehrdeutigen Fall (Sturz, danach derselbe Grad)
+     * entscheidet der Nutzer.
+     */
+    val startsNewBoulder: Boolean = false,
+
     val startedAt: Long,
 
     /** null solange der Versuch laeuft. */

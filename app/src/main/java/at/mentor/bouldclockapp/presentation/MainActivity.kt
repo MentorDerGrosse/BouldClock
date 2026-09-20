@@ -95,9 +95,11 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                 is SessionUiState.Running -> ScreenScaffold {
                     SessionScreen(
                         phase = state.phase,
+                        type = state.type,
                         onTrigger = viewModel::trigger,
                         onOutcome = viewModel::logOutcome,
                         onGradeChange = viewModel::previewGrade,
+                        onNewBoulder = viewModel::confirmGradeAsNewBoulder,
                         onFinishSession = viewModel::finishSession,
                     )
                 }

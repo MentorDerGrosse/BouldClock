@@ -377,6 +377,26 @@ class SessionControllerTest {
         assertEquals(1, attemptDao.attempts.size)
     }
 
+    /**
+     * Gemeldeter Fall: statt des langen Drucks zum Beenden wird kurz getippt,
+     * also ein Versuch gestartet. Beim anschliessenden Beenden darf kein leerer
+     * Versuch uebrigbleiben.
+     */
+    @Test
+    fun `ein versehentlich gestarteter Versuch verschwindet beim Beenden`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 30_000L)
+        advance(60_000)
+
+        press()
+        advance(1_000)
+        val finished = controller.finish()!!
+
+        assertEquals(1, attemptDao.attempts.size)
+        assertEquals(1, finished.summary.attemptCount)
+    }
+
     @Test
     fun `genau drei Sekunden zaehlen noch als Versuch`() = runTest {
         controller.start()
@@ -420,6 +440,140 @@ class SessionControllerTest {
         assertFalse(finished.runs[2].isSent)
         assertEquals(4, finished.summary.attemptCount)
         assertEquals(2, finished.summary.sendCount)
+    }
+
+    // --- Boulder-Grenze ---
+
+    /** Vollstaendiger Versuch mit ausgewaehltem Grad und Ergebnis. */
+    private suspend fun burn(grade: String, outcome: AttemptOutcome?, newBoulder: Boolean = false) {
+        press()
+        advance(20_000)
+        press()
+        controller.previewGrade(Grades.parse(grade)!!)
+        advance(gradingMs)
+        if (newBoulder) controller.confirmGrade(forceNewBoulder = true) else press()
+        outcome?.let {
+            controller.logOutcome((controller.phase.value as SessionPhase.Resting).lastAttemptId, it)
+        }
+        advance(90_000)
+    }
+
+    private fun attempt(ordinal: Int) = attemptDao.attempts.values.first { it.ordinal == ordinal }
+
+    @Test
+    fun `nach einem Top beginnt der naechste Versuch einen neuen Boulder`() = runTest {
+        controller.start()
+        burn("7A", AttemptOutcome.TOP)
+        burn("7A", null)
+
+        assertTrue(attempt(1).startsNewBoulder)
+        assertTrue(attempt(2).startsNewBoulder)
+    }
+
+    /** Projektieren: Sturz, wieder derselbe Grad - das ist weiterhin derselbe Boulder. */
+    @Test
+    fun `nach einem Sturz mit gleichem Grad bleibt es derselbe Boulder`() = runTest {
+        controller.start()
+        burn("7A", AttemptOutcome.FAIL)
+        burn("7A", AttemptOutcome.FAIL)
+        burn("7A", null)
+
+        assertTrue(attempt(1).startsNewBoulder)
+        assertFalse(attempt(2).startsNewBoulder)
+        assertFalse(attempt(3).startsNewBoulder)
+    }
+
+    @Test
+    fun `ein anderer Grad beginnt von selbst einen neuen Boulder`() = runTest {
+        controller.start()
+        burn("7A", AttemptOutcome.FAIL)
+        burn("6B", null)
+
+        assertTrue(attempt(2).startsNewBoulder)
+    }
+
+    /** Der mehrdeutige Fall, den der Nutzer entscheidet. */
+    @Test
+    fun `Neu erzwingt einen neuen Boulder trotz gleichem Grad`() = runTest {
+        controller.start()
+        burn("7A", AttemptOutcome.FAIL)
+        burn("7A", null, newBoulder = true)
+
+        assertTrue(attempt(2).startsNewBoulder)
+    }
+
+    @Test
+    fun `zwei Boulder mit gleichem Grad erscheinen getrennt in der Zusammenfassung`() = runTest {
+        controller.start()
+        burn("7A", AttemptOutcome.FAIL)
+        burn("7A", AttemptOutcome.TOP)
+        burn("7A", AttemptOutcome.FAIL)
+        burn("7A", null)
+
+        val finished = controller.finish()!!
+        assertEquals(2, finished.runs.size)
+        assertEquals(2, finished.runs[0].attempts)
+        assertTrue(finished.runs[0].isSent)
+        assertEquals(2, finished.runs[1].attempts)
+        assertFalse(finished.runs[1].isSent)
+    }
+
+    // --- Wettkampf ---
+
+    /** Zwei Tipper je Versuch statt drei: keine Gradabfrage dazwischen. */
+    @Test
+    fun `der Wettkampfmodus ueberspringt die Gradabfrage`() = runTest {
+        controller.start(type = SessionType.COMPETITION)
+        press()
+        advance(30_000)
+        press()
+
+        assertTrue(controller.phase.value is SessionPhase.Resting)
+        assertNull(attemptDao.attempts.values.single().gradeValue)
+    }
+
+    @Test
+    fun `im Wettkampf zaehlt Weiterdruecken als Sturz`() = runTest {
+        controller.start(type = SessionType.COMPETITION)
+        press(); advance(30_000); press()
+        advance(60_000); press()
+
+        assertEquals(AttemptOutcome.FAIL, attempt(1).outcome)
+    }
+
+    @Test
+    fun `im Wettkampf bleibt ein getipptes Ergebnis erhalten`() = runTest {
+        controller.start(type = SessionType.COMPETITION)
+        press(); advance(30_000); press()
+        controller.logOutcome(
+            (controller.phase.value as SessionPhase.Resting).lastAttemptId,
+            AttemptOutcome.ZONE,
+        )
+        advance(60_000); press()
+
+        assertEquals(AttemptOutcome.ZONE, attempt(1).outcome)
+    }
+
+    @Test
+    fun `Beenden traegt im Wettkampf das offene Ergebnis nach`() = runTest {
+        controller.start(type = SessionType.COMPETITION)
+        press(); advance(30_000); press()
+        advance(10_000)
+        controller.finish()
+
+        assertEquals(AttemptOutcome.FAIL, attempt(1).outcome)
+    }
+
+    /** Im Alltag wird nichts erfunden: ein nicht protokollierter Versuch bleibt offen. */
+    @Test
+    fun `ausserhalb des Wettkampfs bleibt ein offenes Ergebnis offen`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 30_000L)
+        advance(90_000)
+        press()
+
+        assertNull(attempt(1).outcome)
     }
 
     @Test

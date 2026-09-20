@@ -11,8 +11,14 @@ import org.junit.Test
 
 class AttemptRunsTest {
 
-    private fun fact(grade: String?, send: Boolean = false, hrMax: Int? = null) = AttemptFact(
+    private fun fact(
+        grade: String?,
+        newBoulder: Boolean = false,
+        send: Boolean = false,
+        hrMax: Int? = null,
+    ) = AttemptFact(
         gradeValue = grade?.let { Grades.parse(it) },
+        startsNewBoulder = newBoulder,
         isSend = send,
         workMs = 20_000L,
         hrMax = hrMax,
@@ -20,12 +26,13 @@ class AttemptRunsTest {
 
     /** Das Beispiel aus der Anforderung: 7A sechsmal, 6B einmal, 7A dreimal. */
     @Test
-    fun `aufeinanderfolgende Versuche desselben Grades werden zu einem Boulder`() {
+    fun `Versuche zwischen zwei Grenzen sind ein Boulder`() {
         val runs = groupRuns(
             listOf(
-                fact("7A"), fact("7A"), fact("7A"), fact("7A"), fact("7A"), fact("7A", send = true),
-                fact("6B", send = true),
-                fact("7A"), fact("7A"), fact("7A"),
+                fact("7A", newBoulder = true), fact("7A"), fact("7A"),
+                fact("7A"), fact("7A"), fact("7A", send = true),
+                fact("6B", newBoulder = true, send = true),
+                fact("7A", newBoulder = true), fact("7A"), fact("7A"),
             ),
         )
 
@@ -43,26 +50,48 @@ class AttemptRunsTest {
         assertFalse(runs[2].isSent)
     }
 
-    /** Derselbe Grad nach einem Wechsel ist ein anderer Boulder, keine Fortsetzung. */
+    /**
+     * Zwei verschiedene 7A hintereinander. Frueher verschmolzen die zu einem
+     * Boulder, weil nur der Grad verglichen wurde - jetzt trennt die Grenze.
+     */
     @Test
-    fun `ein Gradwechsel trennt auch bei Rueckkehr`() {
-        val runs = groupRuns(listOf(fact("6A"), fact("6B"), fact("6A")))
-        assertEquals(3, runs.size)
-        assertEquals(runs[0].gradeValue, runs[2].gradeValue)
+    fun `zwei Boulder mit gleichem Grad bleiben getrennt`() {
+        val runs = groupRuns(
+            listOf(
+                fact("7A", newBoulder = true), fact("7A"),
+                fact("7A", newBoulder = true), fact("7A"), fact("7A"),
+            ),
+        )
+        assertEquals(2, runs.size)
+        assertEquals(2, runs[0].attempts)
+        assertEquals(3, runs[1].attempts)
+        assertEquals(runs[0].gradeValue, runs[1].gradeValue)
     }
 
+    /** Im Wettkampf gibt es keine Grade - getrennt wird trotzdem sauber. */
     @Test
-    fun `Versuche ohne Grad bilden eigene Gruppen`() {
-        val runs = groupRuns(listOf(fact(null), fact(null), fact("6A")))
+    fun `ohne Grade traegt allein die Grenze`() {
+        val runs = groupRuns(
+            listOf(
+                fact(null, newBoulder = true), fact(null), fact(null, send = true),
+                fact(null, newBoulder = true), fact(null),
+            ),
+        )
         assertEquals(2, runs.size)
         assertNull(runs[0].gradeValue)
-        assertEquals(2, runs[0].attempts)
+        assertEquals(3, runs[0].attempts)
+        assertTrue(runs[0].isSent)
+        assertEquals(2, runs[1].attempts)
     }
 
     @Test
     fun `Wandzeit und Maximalpuls werden ueber die Gruppe zusammengezogen`() {
         val runs = groupRuns(
-            listOf(fact("6A", hrMax = 150), fact("6A", hrMax = 171), fact("6A", hrMax = null)),
+            listOf(
+                fact("6A", newBoulder = true, hrMax = 150),
+                fact("6A", hrMax = 171),
+                fact("6A", hrMax = null),
+            ),
         )
         assertEquals(1, runs.size)
         assertEquals(60_000L, runs.single().workMs)

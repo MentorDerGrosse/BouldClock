@@ -142,18 +142,30 @@ class SessionController(
     }
 
     private suspend fun beginAttempt(session: SessionEntity, now: Long) {
+        var previous = attemptDao.lastFinished(session.id)
+
+        // Im Wettkampf gibt es keine Gradabfrage und keine Musse zum Tippen.
+        // Wer weiterdrueckt, ohne ein Ergebnis gewaehlt zu haben, ist gestuerzt.
+        if (session.type.isCompetition && previous != null && previous.outcome == null) {
+            previous = previous.copy(
+                outcome = AttemptOutcome.FAIL,
+                meta = previous.meta.touched(now),
+            )
+            attemptDao.upsert(previous)
+        }
+
         // Pause des vorigen Versuchs abschliessen. Erst jetzt steht ihre Laenge
         // fest, und damit auch, ob HRR60 ueberhaupt gueltig sein kann.
-        attemptDao.lastFinished(session.id)?.let { previous ->
-            val endedAt = previous.endedAt
-            if (endedAt != null && previous.restAfterMs == null) {
+        previous?.let { last ->
+            val endedAt = last.endedAt
+            if (endedAt != null && last.restAfterMs == null) {
                 attemptDao.upsert(
-                    previous.copy(
+                    last.copy(
                         restAfterMs = now - endedAt,
-                        meta = previous.meta.touched(now),
+                        meta = last.meta.touched(now),
                     ),
                 )
-                settleHrr60(previous.id)
+                settleHrr60(last.id)
             }
         }
 
@@ -162,6 +174,10 @@ class SessionController(
             sessionId = session.id,
             ordinal = attemptDao.nextOrdinal(session.id),
             startedAt = now,
+            // Vorlaeufig: nach einem Top faengt zwangslaeufig ein neuer Boulder
+            // an, ebenso beim allerersten Versuch. Die Gradabfrage praezisiert
+            // das gleich noch.
+            startsNewBoulder = previous == null || previous.outcome?.isSend == true,
             meta = RecordMeta.now(now),
         )
         attemptDao.upsert(attempt)
@@ -199,13 +215,27 @@ class SessionController(
         // Weiter zur Gradabfrage, nicht direkt in die Pause: hier steht man noch
         // unter dem Boulder. Das Ergebnis wird spaeter abgefragt - dafuer ist die
         // ganze Pause Zeit.
+        // Im Wettkampf ohne Umweg in die Pause: dort gibt es keine Grade, und
+        // jede zusaetzliche Ansicht kostet Sekunden, die man nicht hat.
+        if (session.type.isCompetition) {
+            _phase.value = SessionPhase.Resting(
+                since = now,
+                targetMs = session.restTargetMs,
+                lastAttemptId = phase.attemptId,
+            )
+            return
+        }
+
         // Stufe aus der Vorgeschichte, Skala aus den Einstellungen: die Stufe ist
         // eine Schwierigkeit, die Skala nur ihre Schreibweise.
+        val previous = attemptDao.previousFinished(session.id, phase.attemptId)
         _phase.value = SessionPhase.Grading(
             attemptId = phase.attemptId,
             endedAt = now,
             gradeValue = attemptDao.lastGradeValue() ?: Grades.DEFAULT_VALUE,
             gradeSystem = preferredGradeSystem(),
+            previousGradeValue = previous?.gradeValue,
+            previousWasSend = previous?.outcome?.isSend == true,
         )
     }
 
@@ -232,23 +262,30 @@ class SessionController(
         }
     }
 
-    /** Grad bestaetigen und in die Pause wechseln. */
-    suspend fun confirmGrade() = mutex.withLock {
+    /**
+     * Grad bestaetigen und in die Pause wechseln.
+     *
+     * [forceNewBoulder] nur fuer den mehrdeutigen Fall - Sturz, danach derselbe
+     * Grad. Sonst ergibt sich die Boulder-Grenze von selbst.
+     */
+    suspend fun confirmGrade(forceNewBoulder: Boolean = false) = mutex.withLock {
         val session = _session.value ?: return@withLock
         val grading = _phase.value as? SessionPhase.Grading ?: return@withLock
-        applyGrade(session, grading, clock())
+        applyGrade(session, grading, clock(), forceNewBoulder)
     }
 
     private suspend fun applyGrade(
         session: SessionEntity,
         grading: SessionPhase.Grading,
         now: Long,
+        forceNewBoulder: Boolean = false,
     ) {
         attemptDao.byId(grading.attemptId)?.let { attempt ->
             attemptDao.upsert(
                 attempt.copy(
                     gradeValue = grading.gradeValue,
                     gradeSystem = grading.gradeSystem,
+                    startsNewBoulder = forceNewBoulder || !grading.boulderAmbiguous,
                     meta = attempt.meta.touched(now),
                 ),
             )
@@ -335,7 +372,14 @@ class SessionController(
         // Ein noch laufender Versuch wird beendet, nicht verschluckt.
         (_phase.value as? SessionPhase.Climbing)?.let { endAttempt(session, it, now) }
         (_phase.value as? SessionPhase.Grading)?.let { applyGrade(session, it, now) }
-        (_phase.value as? SessionPhase.Resting)?.let { settleHrr60(it.lastAttemptId) }
+        (_phase.value as? SessionPhase.Resting)?.let { resting ->
+            if (session.type.isCompetition) {
+                attemptDao.byId(resting.lastAttemptId)?.takeIf { it.outcome == null }?.let {
+                    attemptDao.upsert(it.copy(outcome = AttemptOutcome.FAIL, meta = it.meta.touched(now)))
+                }
+            }
+            settleHrr60(resting.lastAttemptId)
+        }
 
         val finished = session.copy(
             state = SessionState.FINISHED,
@@ -361,6 +405,7 @@ class SessionController(
             attemptDao.finishedBySession(finished.id).map { attempt ->
                 AttemptFact(
                     gradeValue = attempt.gradeValue,
+                    startsNewBoulder = attempt.startsNewBoulder,
                     isSend = attempt.outcome?.isSend == true,
                     workMs = (attempt.endedAt ?: attempt.startedAt) - attempt.startedAt,
                     hrMax = attempt.hrMax,

@@ -84,6 +84,16 @@ class FakeAttemptDao : AttemptDao {
 
     override fun observeByProblem(problemId: String): Flow<List<AttemptEntity>> = flowOf(emptyList())
 
+    override suspend fun previousFinished(
+        sessionId: String,
+        beforeAttemptId: String,
+    ): AttemptEntity? {
+        val pivot = attempts[beforeAttemptId] ?: return null
+        return of(sessionId)
+            .filter { it.endedAt != null && it.ordinal < pivot.ordinal }
+            .maxByOrNull { it.ordinal }
+    }
+
     override suspend fun finishedBySession(sessionId: String): List<AttemptEntity> =
         of(sessionId).filter { it.endedAt != null }.sortedBy { it.ordinal }
 

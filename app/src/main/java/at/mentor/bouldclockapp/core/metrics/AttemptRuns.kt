@@ -3,6 +3,7 @@ package at.mentor.bouldclockapp.core.metrics
 /** Ein Versuch, reduziert auf das, was die Zusammenfassung braucht. */
 data class AttemptFact(
     val gradeValue: Int?,
+    val startsNewBoulder: Boolean,
     val isSend: Boolean,
     val workMs: Long,
     val hrMax: Int?,
@@ -11,9 +12,8 @@ data class AttemptFact(
 /**
  * Aufeinanderfolgende Versuche desselben Grades.
  *
- * In der Praxis ist das ein Boulder: wer sechsmal hintereinander an 7A
- * herumprobiert, war sechsmal am selben Problem. Wechselt der Grad, faengt eine
- * neue Gruppe an - auch wenn spaeter wieder derselbe Grad kommt.
+ * Ein Boulder: die Versuche zwischen zwei Grenzen. Wer sechsmal an 7A
+ * herumprobiert, war sechsmal am selben Problem.
  */
 data class AttemptRun(
     val gradeValue: Int?,
@@ -29,20 +29,21 @@ data class AttemptRun(
 }
 
 /**
- * Fasst die Versuche einer Session zu Boulder-Gruppen zusammen.
+ * Fasst die Versuche einer Session zu Bouldern zusammen.
  *
- * Die Eingabe muss in zeitlicher Reihenfolge vorliegen.
- *
- * Bewusste Naeherung: zwei verschiedene 7A direkt hintereinander verschmelzen zu
- * einer Gruppe, weil die App den Boulder nicht kennt. Sauber trennen liesse sich
- * das erst, wenn Versuche einem konkreten Problem zugeordnet werden.
+ * Die Eingabe muss in zeitlicher Reihenfolge vorliegen. Getrennt wird an
+ * [AttemptFact.startsNewBoulder] - also an dem, was beim Protokollieren
+ * festgestellt wurde, nicht an einer Vermutung aus gleichen Graden. Zwei
+ * verschiedene 7A hintereinander bleiben dadurch zwei Boulder.
  */
 fun groupRuns(attempts: List<AttemptFact>): List<AttemptRun> {
     val runs = mutableListOf<AttemptRun>()
     attempts.forEach { fact ->
         val last = runs.lastOrNull()
-        if (last != null && last.gradeValue == fact.gradeValue) {
+        if (last != null && !fact.startsNewBoulder) {
             runs[runs.lastIndex] = last.copy(
+                // Der Grad wird beim ersten Versuch mit Angabe festgehalten.
+                gradeValue = last.gradeValue ?: fact.gradeValue,
                 attempts = last.attempts + 1,
                 sends = last.sends + if (fact.isSend) 1 else 0,
                 workMs = last.workMs + fact.workMs,

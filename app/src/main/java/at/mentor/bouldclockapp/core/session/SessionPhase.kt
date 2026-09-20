@@ -44,7 +44,22 @@ sealed interface SessionPhase {
         val endedAt: Long,
         val gradeValue: Int,
         val gradeSystem: GradeSystem,
-    ) : SessionPhase
+
+        /** Grad des vorigen Versuchs, `null` wenn es keinen gibt. */
+        val previousGradeValue: Int? = null,
+
+        /** War der vorige Versuch ein Top? Dann faengt zwangslaeufig ein neuer Boulder an. */
+        val previousWasSend: Boolean = false,
+    ) : SessionPhase {
+
+        /**
+         * Nur hier ist offen, ob ein neuer Boulder beginnt: der vorige Versuch
+         * ging nicht durch und hatte denselben Grad. Ueberall sonst ergibt es
+         * sich von selbst, und dann wird auch nicht gefragt.
+         */
+        val boulderAmbiguous: Boolean
+            get() = !previousWasSend && previousGradeValue != null && previousGradeValue == gradeValue
+    }
 
     /** Zwischen zwei Versuchen. */
     data class Resting(

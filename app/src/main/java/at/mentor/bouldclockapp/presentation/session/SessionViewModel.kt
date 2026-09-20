@@ -38,7 +38,7 @@ sealed interface SessionUiState {
     /** Pausenlaenge waehlen, bevor eine benutzerdefinierte Session startet. */
     data class ChoosingRest(val restTargetMs: Long) : SessionUiState
 
-    data class Running(val phase: SessionPhase) : SessionUiState
+    data class Running(val phase: SessionPhase, val type: SessionType) : SessionUiState
 
     /** Zusammenfassung nach dem Beenden. */
     data class Summary(val finished: FinishedSession) : SessionUiState
@@ -75,7 +75,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         when {
             !restored -> SessionUiState.Restoring
             finishedSession != null -> SessionUiState.Summary(finishedSession)
-            session != null -> SessionUiState.Running(phase)
+            session != null -> SessionUiState.Running(phase, session.type)
             pendingRest != null -> SessionUiState.ChoosingRest(pendingRest)
             else -> SessionUiState.NoSession
         }
@@ -141,6 +141,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     /** Gradauswahl mitfuehren - geschrieben wird erst beim Bestaetigen. */
     fun previewGrade(gradeValue: Int) = controller.previewGrade(gradeValue)
+
+    /** Grad bestaetigen und dabei ausdruecklich einen neuen Boulder beginnen. */
+    fun confirmGradeAsNewBoulder() {
+        viewModelScope.launch { controller.confirmGrade(forceNewBoulder = true) }
+    }
 
     /** Der eine Knopf. */
     fun trigger() {

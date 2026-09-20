@@ -46,6 +46,19 @@ interface AttemptDao {
     )
     suspend fun lastFinished(sessionId: String): AttemptEntity?
 
+    /** Der beendete Versuch direkt vor :beforeAttemptId - fuer die Boulder-Grenze. */
+    @Query(
+        """
+        SELECT * FROM attempt
+        WHERE sessionId = :sessionId
+          AND deletedAt IS NULL
+          AND endedAt IS NOT NULL
+          AND ordinal < (SELECT ordinal FROM attempt WHERE id = :beforeAttemptId)
+        ORDER BY ordinal DESC LIMIT 1
+        """,
+    )
+    suspend fun previousFinished(sessionId: String, beforeAttemptId: String): AttemptEntity?
+
     /** Beendete Versuche in zeitlicher Reihenfolge - Grundlage der Zusammenfassung. */
     @Query(
         """
