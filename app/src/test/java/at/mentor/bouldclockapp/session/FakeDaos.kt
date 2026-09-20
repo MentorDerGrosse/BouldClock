@@ -84,6 +84,12 @@ class FakeAttemptDao : AttemptDao {
 
     override fun observeByProblem(problemId: String): Flow<List<AttemptEntity>> = flowOf(emptyList())
 
+    override suspend fun lastBoardAngle(): Int? =
+        attempts.values
+            .filter { it.boardAngleDegrees != null && it.meta.deletedAt == null }
+            .maxByOrNull { it.startedAt }
+            ?.boardAngleDegrees
+
     override suspend fun previousFinished(
         sessionId: String,
         beforeAttemptId: String,

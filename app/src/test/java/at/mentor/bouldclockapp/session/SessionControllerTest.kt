@@ -1,6 +1,7 @@
 package at.mentor.bouldclockapp.session
 
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
+import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionState
@@ -516,6 +517,68 @@ class SessionControllerTest {
         assertTrue(finished.runs[0].isSent)
         assertEquals(2, finished.runs[1].attempts)
         assertFalse(finished.runs[1].isSent)
+    }
+
+    // --- Board ---
+
+    /** Am Board kommt der Winkel vor dem Grad: ohne ihn sagt der Grad nichts aus. */
+    @Test
+    fun `der Board-Modus fragt vor dem Grad den Winkel ab`() = runTest {
+        controller.start(type = SessionType.KILTERBOARD)
+        press()
+        advance(20_000)
+        press()
+
+        val phase = controller.phase.value
+        assertTrue(phase is SessionPhase.ChoosingAngle)
+        assertEquals(BoardAngles.DEFAULT, (phase as SessionPhase.ChoosingAngle).angleDegrees)
+
+        controller.previewAngle(45)
+        advance(gradingMs)
+        press()
+
+        assertTrue(controller.phase.value is SessionPhase.Grading)
+        assertEquals(45, attemptDao.attempts.values.single().boardAngleDegrees)
+    }
+
+    @Test
+    fun `der zuletzt eingestellte Winkel wird vorgeschlagen`() = runTest {
+        controller.start(type = SessionType.KILTERBOARD)
+        press(); advance(20_000); press()
+        controller.previewAngle(25)
+        advance(gradingMs); press()
+        advance(gradingMs); press()
+        advance(90_000)
+
+        press(); advance(20_000); press()
+
+        assertEquals(25, (controller.phase.value as SessionPhase.ChoosingAngle).angleDegrees)
+    }
+
+    @Test
+    fun `Beenden aus der Winkelabfrage heraus schreibt den Winkel noch`() = runTest {
+        controller.start(type = SessionType.KILTERBOARD)
+        press(); advance(20_000); press()
+        controller.previewAngle(50)
+
+        controller.finish()
+
+        assertEquals(50, attemptDao.attempts.values.single().boardAngleDegrees)
+        assertEquals(SessionPhase.Ready, controller.phase.value)
+    }
+
+    @Test
+    fun `der Winkel landet in der Zusammenfassung`() = runTest {
+        controller.start(type = SessionType.KILTERBOARD)
+        press(); advance(20_000); press()
+        controller.previewAngle(35)
+        advance(gradingMs); press()
+        controller.previewGrade(Grades.parse("7A")!!)
+        advance(gradingMs); press()
+        advance(10_000)
+
+        val finished = controller.finish()!!
+        assertEquals(35, finished.runs.single().boardAngleDegrees)
     }
 
     // --- Wettkampf ---

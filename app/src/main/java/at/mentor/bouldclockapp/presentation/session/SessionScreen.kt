@@ -3,6 +3,7 @@ package at.mentor.bouldclockapp.presentation.session
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import at.mentor.bouldclockapp.core.session.RestProgress
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.core.session.TriggerAction
 import at.mentor.bouldclockapp.core.session.nextAction
+import at.mentor.bouldclockapp.presentation.components.AnglePicker
 import at.mentor.bouldclockapp.presentation.components.GradePicker
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
 
@@ -53,6 +55,7 @@ fun SessionScreen(
     onTrigger: () -> Unit,
     onOutcome: (AttemptOutcome) -> Unit,
     onGradeChange: (Int) -> Unit,
+    onAngleChange: (Int) -> Unit,
     onNewBoulder: () -> Unit,
     onFinishSession: () -> Unit,
     modifier: Modifier = Modifier,
@@ -80,6 +83,18 @@ fun SessionScreen(
             BigState(
                 value = RestDurations.format((now - phase.startedAt).coerceAtLeast(0L)),
                 caption = "Tippen beendet den Versuch",
+            )
+        }
+
+        is SessionPhase.ChoosingAngle -> PickerScreen(
+            onConfirm = onTrigger,
+            onFinishSession = onFinishSession,
+            modifier = modifier,
+        ) {
+            AnglePicker(
+                degrees = phase.angleDegrees,
+                onDegreesChange = onAngleChange,
+                modifier = Modifier.weight(1f),
             )
         }
 
@@ -123,15 +138,21 @@ private fun GradingContent(
     onFinishSession: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Keine Ueberschrift: der obere Rand gehoert der Systemuhrzeit von
-    // ScreenScaffold, dort wird alles ueberdeckt. Ein Rad voller Grade braucht
-    // ohnehin keine Beschriftung.
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(start = 8.dp, end = 8.dp, top = 22.dp, bottom = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    PickerScreen(
+        onConfirm = onConfirm,
+        onFinishSession = onFinishSession,
+        modifier = modifier,
+        extraButton = if (phase.boulderAmbiguous) {
+            {
+                CompactButton(
+                    onClick = onNewBoulder,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    label = { Text("Neu", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
+                )
+            }
+        } else {
+            null
+        },
     ) {
         GradePicker(
             system = phase.gradeSystem,
@@ -139,6 +160,32 @@ private fun GradingContent(
             onValueChange = onGradeChange,
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+/**
+ * Gemeinsames Geruest fuer Winkel- und Gradabfrage: Rad oben, Bestaetigen unten.
+ *
+ * Keine Ueberschrift - der obere Rand gehoert der Systemuhrzeit von
+ * ScreenScaffold, dort wird alles ueberdeckt. Ein Rad voller Zahlen braucht
+ * ohnehin keine Beschriftung.
+ */
+@Composable
+private fun PickerScreen(
+    onConfirm: () -> Unit,
+    onFinishSession: () -> Unit,
+    modifier: Modifier = Modifier,
+    extraButton: (@Composable () -> Unit)? = null,
+    picker: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(start = 8.dp, end = 8.dp, top = 22.dp, bottom = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        picker()
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             CompactButton(
                 onClick = onConfirm,
@@ -146,13 +193,7 @@ private fun GradingContent(
                 onLongClickLabel = SESSION_END_LABEL,
                 label = { Text("Weiter", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
             )
-            if (phase.boulderAmbiguous) {
-                CompactButton(
-                    onClick = onNewBoulder,
-                    colors = ButtonDefaults.filledTonalButtonColors(),
-                    label = { Text("Neu", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
-                )
-            }
+            extraButton?.invoke()
         }
     }
 }
@@ -324,6 +365,7 @@ private fun SessionRestingPreview() {
             onTrigger = {},
             onOutcome = {},
             onGradeChange = {},
+            onAngleChange = {},
             onNewBoulder = {},
             onFinishSession = {},
         )
@@ -347,6 +389,7 @@ private fun SessionGradingPreview() {
             onTrigger = {},
             onOutcome = {},
             onGradeChange = {},
+            onAngleChange = {},
             onNewBoulder = {},
             onFinishSession = {},
         )
@@ -367,6 +410,7 @@ private fun CompetitionRestingPreview() {
             onTrigger = {},
             onOutcome = {},
             onGradeChange = {},
+            onAngleChange = {},
             onNewBoulder = {},
             onFinishSession = {},
         )

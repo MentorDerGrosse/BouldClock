@@ -20,6 +20,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import at.mentor.bouldclockapp.core.metrics.AttemptRun
+import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionType
@@ -60,6 +61,13 @@ fun SessionSummaryScreen(
 
             item { StatRow("Versuche", "${summary.attemptCount}") }
             item { StatRow("Tops", "${summary.sendCount}") }
+
+            // Wie viele Versuche gingen durch. Ueber eine einzelne Session
+            // verrauscht - ein hartes Projekt drueckt sie auf zehn Prozent -,
+            // aber im Verlauf die Effizienzzahl.
+            summary.sendRate?.let { rate ->
+                item { StatRow("Quote", "${(rate * 100).roundToInt()} %") }
+            }
             item { StatRow("An der Wand", formatDuration(summary.workMs)) }
             item { StatRow("Pause", formatDuration(summary.restMs)) }
 
@@ -87,7 +95,10 @@ fun SessionSummaryScreen(
                         StatRow(
                             label = run.gradeLabel(gradeSystem),
                             value = run.attemptLabel(),
-                            note = run.resultLabel(),
+                            note = listOfNotNull(
+                                run.boardAngleDegrees?.let { BoardAngles.format(it) },
+                                run.resultLabel(),
+                            ).joinToString(" · ").takeIf { it.isNotEmpty() },
                         )
                     }
                 }

@@ -3,6 +3,7 @@ package at.mentor.bouldclockapp.core
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
+import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.RestDurations
 import at.mentor.bouldclockapp.core.model.SessionType
 import org.junit.Assert.assertEquals
@@ -151,5 +152,31 @@ class RestDurationsTest {
     fun `die Voreinstellungen trennen die Trainingsformen`() {
         assertTrue(SessionType.LIMIT.defaultRestMs > SessionType.FREE.defaultRestMs)
         assertTrue(SessionType.VOLUME.defaultRestMs < SessionType.FREE.defaultRestMs)
+    }
+}
+
+class BoardAnglesTest {
+
+    @Test
+    fun `der Verstellbereich deckt das Kilterboard ab`() {
+        assertEquals(0, BoardAngles.DEGREES.first())
+        assertEquals(70, BoardAngles.DEGREES.last())
+        assertTrue(BoardAngles.DEFAULT in BoardAngles.DEGREES)
+    }
+
+    @Test
+    fun `krumme Winkel rasten auf den naechsten Fuenferschritt ein`() {
+        assertEquals(40, BoardAngles.clamp(38))
+        assertEquals(45, BoardAngles.clamp(44))
+        assertEquals(0, BoardAngles.clamp(-10))
+        assertEquals(70, BoardAngles.clamp(120))
+    }
+
+    @Test
+    fun `der Index bleibt im Bereich`() {
+        BoardAngles.DEGREES.forEach { degrees ->
+            assertEquals(degrees, BoardAngles.DEGREES[BoardAngles.indexOf(degrees)])
+        }
+        assertEquals("40°", BoardAngles.format(40))
     }
 }

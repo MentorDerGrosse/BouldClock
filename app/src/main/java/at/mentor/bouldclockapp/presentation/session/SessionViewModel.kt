@@ -142,6 +142,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     /** Gradauswahl mitfuehren - geschrieben wird erst beim Bestaetigen. */
     fun previewGrade(gradeValue: Int) = controller.previewGrade(gradeValue)
 
+    /** Winkelauswahl mitfuehren - geschrieben wird erst beim Bestaetigen. */
+    fun previewAngle(degrees: Int) = controller.previewAngle(degrees)
+
     /** Grad bestaetigen und dabei ausdruecklich einen neuen Boulder beginnen. */
     fun confirmGradeAsNewBoulder() {
         viewModelScope.launch { controller.confirmGrade(forceNewBoulder = true) }

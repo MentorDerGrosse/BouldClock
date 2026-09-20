@@ -35,7 +35,7 @@ import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
     // ergaenzen. Bleibt die Nummer stehen, weigert sich Room beim ersten
     // Datenbankzugriff, eine vorhandene Datei zu oeffnen - die App stirbt dann
     // beim Start, ohne dass ein Test das vorher merkt.
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class BouldClockDatabase : RoomDatabase() {
@@ -68,12 +68,19 @@ abstract class BouldClockDatabase : RoomDatabase() {
             }
         }
 
+        /** Boardwinkel am Versuch. Altdaten stammen nicht vom Board, bleiben also leer. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE attempt ADD COLUMN boardAngleDegrees INTEGER")
+            }
+        }
+
         private fun build(context: Context): BouldClockDatabase =
             Room.databaseBuilder(context, BouldClockDatabase::class.java, NAME)
                 // Rooms Default, hier bewusst explizit: die Absturzsicherheit der
                 // laufenden Session haengt genau daran.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 // Notnagel fuer die Entwicklung: eine vergessene Migration soll
                 // die Datenbank leeren, nicht die App unstartbar machen. Vor der
                 // ersten echten Veroeffentlichung muss das hier raus, sonst

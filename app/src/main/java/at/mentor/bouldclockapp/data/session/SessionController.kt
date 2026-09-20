@@ -6,6 +6,7 @@ import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.metrics.groupRuns
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
+import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
@@ -136,6 +137,7 @@ class SessionController(
         when (val phase = _phase.value) {
             SessionPhase.Ready, is SessionPhase.Resting -> beginAttempt(session, now)
             is SessionPhase.Climbing -> endAttempt(session, phase, now)
+            is SessionPhase.ChoosingAngle -> applyAngle(session, phase, now)
             is SessionPhase.Grading -> applyGrade(session, phase, now)
         }
         true
@@ -226,17 +228,59 @@ class SessionController(
             return
         }
 
+        // Am Board zuerst der Winkel: ohne ihn sagt der Grad nichts aus.
+        if (session.type.hasBoardAngle) {
+            _phase.value = SessionPhase.ChoosingAngle(
+                attemptId = phase.attemptId,
+                endedAt = now,
+                angleDegrees = attemptDao.lastBoardAngle() ?: BoardAngles.DEFAULT,
+            )
+            return
+        }
+
+        enterGrading(session, phase.attemptId, now)
+    }
+
+    /** Wechselt in die Gradabfrage und sammelt dafuer die Vorgeschichte ein. */
+    private suspend fun enterGrading(session: SessionEntity, attemptId: String, endedAt: Long) {
         // Stufe aus der Vorgeschichte, Skala aus den Einstellungen: die Stufe ist
         // eine Schwierigkeit, die Skala nur ihre Schreibweise.
-        val previous = attemptDao.previousFinished(session.id, phase.attemptId)
+        val previous = attemptDao.previousFinished(session.id, attemptId)
         _phase.value = SessionPhase.Grading(
-            attemptId = phase.attemptId,
-            endedAt = now,
+            attemptId = attemptId,
+            endedAt = endedAt,
             gradeValue = attemptDao.lastGradeValue() ?: Grades.DEFAULT_VALUE,
             gradeSystem = preferredGradeSystem(),
             previousGradeValue = previous?.gradeValue,
             previousWasSend = previous?.outcome?.isSend == true,
         )
+    }
+
+    /** Winkelauswahl mitfuehren - geschrieben wird erst beim Bestaetigen. */
+    fun previewAngle(degrees: Int) {
+        _phase.update { current ->
+            if (current is SessionPhase.ChoosingAngle) {
+                current.copy(angleDegrees = BoardAngles.clamp(degrees))
+            } else {
+                current
+            }
+        }
+    }
+
+    private suspend fun applyAngle(
+        session: SessionEntity,
+        choosing: SessionPhase.ChoosingAngle,
+        now: Long,
+    ) {
+        attemptDao.byId(choosing.attemptId)?.let { attempt ->
+            attemptDao.upsert(
+                attempt.copy(
+                    boardAngleDegrees = choosing.angleDegrees,
+                    meta = attempt.meta.touched(now),
+                ),
+            )
+        }
+        enterGrading(session, choosing.attemptId, choosing.endedAt)
     }
 
     /**
@@ -253,12 +297,6 @@ class SessionController(
             } else {
                 current
             }
-        }
-    }
-
-    fun previewGradeSystem(gradeSystem: GradeSystem) {
-        _phase.update { current ->
-            if (current is SessionPhase.Grading) current.copy(gradeSystem = gradeSystem) else current
         }
     }
 
@@ -371,6 +409,7 @@ class SessionController(
 
         // Ein noch laufender Versuch wird beendet, nicht verschluckt.
         (_phase.value as? SessionPhase.Climbing)?.let { endAttempt(session, it, now) }
+        (_phase.value as? SessionPhase.ChoosingAngle)?.let { applyAngle(session, it, now) }
         (_phase.value as? SessionPhase.Grading)?.let { applyGrade(session, it, now) }
         (_phase.value as? SessionPhase.Resting)?.let { resting ->
             if (session.type.isCompetition) {
@@ -405,6 +444,7 @@ class SessionController(
             attemptDao.finishedBySession(finished.id).map { attempt ->
                 AttemptFact(
                     gradeValue = attempt.gradeValue,
+                    boardAngleDegrees = attempt.boardAngleDegrees,
                     startsNewBoulder = attempt.startsNewBoulder,
                     isSend = attempt.outcome?.isSend == true,
                     workMs = (attempt.endedAt ?: attempt.startedAt) - attempt.startedAt,

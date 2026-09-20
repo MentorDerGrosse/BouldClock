@@ -105,6 +105,16 @@ interface AttemptDao {
     )
     suspend fun lastGradeValue(): Int?
 
+    /** Zuletzt eingestellter Boardwinkel - Vorschlag fuer den naechsten Versuch. */
+    @Query(
+        """
+        SELECT boardAngleDegrees FROM attempt
+        WHERE boardAngleDegrees IS NOT NULL AND deletedAt IS NULL
+        ORDER BY startedAt DESC LIMIT 1
+        """,
+    )
+    suspend fun lastBoardAngle(): Int?
+
     @Query("UPDATE attempt SET deletedAt = :now, updatedAt = :now, syncState = 'PENDING' WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 

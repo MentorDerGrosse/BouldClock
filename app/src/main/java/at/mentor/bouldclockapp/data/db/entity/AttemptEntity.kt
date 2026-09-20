@@ -76,6 +76,14 @@ data class AttemptEntity(
     /** Bis zu welchem Zug gekommen. Fuettert den Projektverlauf. */
     val topMoveReached: Int? = null,
 
+    /**
+     * Neigung des Boards in Grad, nur im Board-Modus gesetzt.
+     *
+     * Am Versuch und nicht an der Session: an einem Abend wird umgestellt, und
+     * ohne den Winkel ist ein Boardgrad nichts wert.
+     */
+    val boardAngleDegrees: Int? = null,
+
     // --- Pulsauswertung, gefuellt beim Beenden bzw. 60 s danach ---
 
     val hrAvg: Int? = null,

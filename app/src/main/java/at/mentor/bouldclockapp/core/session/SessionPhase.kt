@@ -9,7 +9,10 @@ import at.mentor.bouldclockapp.core.model.GradeSystem
  * Die ganze Bedienung waehrend des Boulderns laeuft ueber genau einen Ausloeser,
  * der zwischen diesen Zustaenden schaltet:
  *
- *     Ready --> Climbing --> Grading --> Resting --> Climbing --> ...
+ *     Ready --> Climbing --> [Winkel] --> [Grad] --> Resting --> Climbing --> ...
+ *
+ * Die Schritte in Klammern haengen von der Sessionart ab: der Wettkampf hat
+ * keinen, das Board beide, alles andere nur den Grad.
  *
  * Entscheidend: aus [Resting] fuehrt **kein** automatischer Uebergang heraus.
  * Der Pausen-Timer ist ein Signal, kein Zustandswechsel. Laeuft er ab, vibriert
@@ -26,6 +29,18 @@ sealed interface SessionPhase {
     data class Climbing(
         val attemptId: String,
         val startedAt: Long,
+    ) : SessionPhase
+
+    /**
+     * Winkelabfrage im Board-Modus, vor dem Grad.
+     *
+     * Vorgeschlagen wird der zuletzt eingestellte Winkel - meistens klettert man
+     * mehrere Boulder am selben, und dann ist es ein Tipper.
+     */
+    data class ChoosingAngle(
+        val attemptId: String,
+        val endedAt: Long,
+        val angleDegrees: Int,
     ) : SessionPhase
 
     /**
@@ -83,6 +98,9 @@ enum class TriggerAction(val label: String) {
     START_FIRST("Start"),
     END_ATTEMPT("Beenden"),
 
+    /** Winkel bestaetigen und zum Grad weitergehen. */
+    CONFIRM_ANGLE("Weiter"),
+
     /** Grad bestaetigen und die Pause anzeigen. */
     CONFIRM_GRADE("Weiter"),
 
@@ -95,6 +113,7 @@ val SessionPhase.nextAction: TriggerAction
     get() = when (this) {
         SessionPhase.Ready -> TriggerAction.START_FIRST
         is SessionPhase.Climbing -> TriggerAction.END_ATTEMPT
+        is SessionPhase.ChoosingAngle -> TriggerAction.CONFIRM_ANGLE
         is SessionPhase.Grading -> TriggerAction.CONFIRM_GRADE
         is SessionPhase.Resting -> TriggerAction.START_NEXT
     }

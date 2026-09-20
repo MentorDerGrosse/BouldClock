@@ -3,6 +3,7 @@ package at.mentor.bouldclockapp.core.metrics
 /** Ein Versuch, reduziert auf das, was die Zusammenfassung braucht. */
 data class AttemptFact(
     val gradeValue: Int?,
+    val boardAngleDegrees: Int? = null,
     val startsNewBoulder: Boolean,
     val isSend: Boolean,
     val workMs: Long,
@@ -17,6 +18,7 @@ data class AttemptFact(
  */
 data class AttemptRun(
     val gradeValue: Int?,
+    val boardAngleDegrees: Int? = null,
     val attempts: Int,
     val sends: Int,
     val workMs: Long,
@@ -44,6 +46,7 @@ fun groupRuns(attempts: List<AttemptFact>): List<AttemptRun> {
             runs[runs.lastIndex] = last.copy(
                 // Der Grad wird beim ersten Versuch mit Angabe festgehalten.
                 gradeValue = last.gradeValue ?: fact.gradeValue,
+                boardAngleDegrees = last.boardAngleDegrees ?: fact.boardAngleDegrees,
                 attempts = last.attempts + 1,
                 sends = last.sends + if (fact.isSend) 1 else 0,
                 workMs = last.workMs + fact.workMs,
@@ -52,6 +55,7 @@ fun groupRuns(attempts: List<AttemptFact>): List<AttemptRun> {
         } else {
             runs += AttemptRun(
                 gradeValue = fact.gradeValue,
+                boardAngleDegrees = fact.boardAngleDegrees,
                 attempts = 1,
                 sends = if (fact.isSend) 1 else 0,
                 workMs = fact.workMs,

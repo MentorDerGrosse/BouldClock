@@ -43,10 +43,20 @@ enum class SessionType(
      * Der Wert hier wird nie angezeigt; die Pause ist im Wettkampf uninteressant.
      */
     COMPETITION("Wettkampf", 4 * 60_000L),
+
+    /**
+     * Verstellbares Board - Kilter, Tension, Moon. Fragt vor dem Grad den
+     * Neigungswinkel ab, weil derselbe Boulder bei 25 und bei 45 Grad zwei
+     * verschiedene Schwierigkeiten sind.
+     */
+    KILTERBOARD("Kilterboard", 3 * 60_000L),
     ;
 
     /** Laeuft ohne Gradabfrage und ohne Pausenziel. */
     val isCompetition: Boolean get() = this == COMPETITION
+
+    /** Fragt zusaetzlich den Boardwinkel ab. */
+    val hasBoardAngle: Boolean get() = this == KILTERBOARD
 }
 
 enum class SessionState {
