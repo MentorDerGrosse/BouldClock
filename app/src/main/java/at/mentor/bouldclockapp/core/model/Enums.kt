@@ -96,12 +96,26 @@ enum class AttemptOutcome(val displayName: String) {
 enum class WallAngle(val displayName: String) {
     SLAB("Platte"),
     VERTICAL("Senkrecht"),
-    SLIGHT_OVERHANG("Leicht ueberhaengend"),
+    SLIGHT_OVERHANG("Leicht überhängend"),
     STEEP("Steil"),
     ROOF("Dach"),
 }
 
 enum class SensorKind { ACCELEROMETER, GYROSCOPE, PRESSURE }
+
+/**
+ * Biologisches Geschlecht - einziger Zweck ist der Grundumsatz in der
+ * Kalorienformel.
+ *
+ * [UNSPECIFIED] rechnet mit einem Mittelwert. Wer das nicht angeben will, soll
+ * die App trotzdem benutzen koennen; der Fehler daraus ist kleiner als der, den
+ * die Kalorienschaetzung beim Bouldern ohnehin hat.
+ */
+enum class BiologicalSex(val displayName: String) {
+    FEMALE("Weiblich"),
+    MALE("Männlich"),
+    UNSPECIFIED("Keine Angabe"),
+}
 
 enum class SyncState {
     /** Liegt nur lokal, muss noch aufs Handy. */

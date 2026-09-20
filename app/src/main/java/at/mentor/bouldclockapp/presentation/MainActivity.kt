@@ -35,6 +35,8 @@ import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.presentation.session.HardwareTriggerBus
 import at.mentor.bouldclockapp.presentation.components.RestDurationScreen
+import at.mentor.bouldclockapp.presentation.profile.ProfileSetupScreen
+import at.mentor.bouldclockapp.presentation.session.ProfileState
 import at.mentor.bouldclockapp.presentation.session.SessionScreen
 import at.mentor.bouldclockapp.presentation.session.SessionSummaryScreen
 import at.mentor.bouldclockapp.presentation.session.SessionUiState
@@ -75,6 +77,19 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
             RequestRecordingPermissions()
 
             val gradeSystem by viewModel.gradeSystem.collectAsStateWithLifecycle()
+            val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+
+            // Ohne Koerperdaten kann die App keine Kalorien rechnen - und die
+            // sind einer der Gruende fuer das Projekt. Deshalb einmal vorab,
+            // danach nie wieder.
+            if (profileState is ProfileState.Missing) {
+                ProfileSetupScreen(onSave = viewModel::saveProfile)
+                return@AppScaffold
+            }
+            if (profileState is ProfileState.Loading) {
+                Box(Modifier.fillMaxSize())
+                return@AppScaffold
+            }
 
             when (val state = uiState) {
                 // Kurz leer statt aufblitzendem Startbildschirm - sonst legt ein

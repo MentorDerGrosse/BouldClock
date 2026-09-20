@@ -5,11 +5,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
+import at.mentor.bouldclockapp.core.model.BiologicalSex
 import at.mentor.bouldclockapp.core.model.GradeSystem
+import at.mentor.bouldclockapp.core.model.ProfileRanges
 import at.mentor.bouldclockapp.core.model.RestDurations
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
+import at.mentor.bouldclockapp.data.db.entity.RecordMeta
+import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.session.SessionController
 import at.mentor.bouldclockapp.data.session.SessionRecordingService
@@ -21,8 +25,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * Was der Bildschirm zeigen soll.
@@ -32,6 +38,18 @@ import kotlinx.coroutines.launch
  * Startbildschirm sieht und eine Sessionart antippt, legt eine zweite Session
  * an, waehrend die erste noch offen ist.
  */
+/**
+ * Zustand des Nutzerprofils.
+ *
+ * [Loading] ist ein eigener Zustand: waere er es nicht, blitzte beim Start die
+ * Profilabfrage auf, obwohl laengst ein Profil existiert.
+ */
+sealed interface ProfileState {
+    data object Loading : ProfileState
+    data object Missing : ProfileState
+    data class Present(val profile: UserProfileEntity) : ProfileState
+}
+
 sealed interface SessionUiState {
     data object Restoring : SessionUiState
     data object NoSession : SessionUiState
@@ -57,6 +75,12 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         // Bei jeder Gradabfrage frisch gelesen - eine Umstellung greift sofort.
         preferredGradeSystem = { settings.gradeSystem.first() },
     )
+
+    private val profileDao = db.userProfileDao()
+
+    val profileState: StateFlow<ProfileState> = profileDao.observe()
+        .map { profile -> profile?.let(ProfileState::Present) ?: ProfileState.Missing }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ProfileState.Loading)
 
     private val restored = MutableStateFlow(false)
     private val choosingRest = MutableStateFlow<Long?>(null)
@@ -102,6 +126,26 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 if (wait > 0) delay(wait)
                 controller.settleHrr60(pending.attemptId)
             }
+        }
+    }
+
+    /**
+     * Legt das Profil an.
+     *
+     * Gespeichert wird das Geburtsjahr, eingegeben das Alter - ein Alter in der
+     * Datenbank waere naechstes Jahr still falsch.
+     */
+    fun saveProfile(weightKg: Int, ageYears: Int, sex: BiologicalSex) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            profileDao.upsert(
+                UserProfileEntity(
+                    weightKg = ProfileRanges.clampWeight(weightKg),
+                    birthYear = LocalDate.now().year - ProfileRanges.clampAge(ageYears),
+                    sex = sex,
+                    meta = RecordMeta.now(now),
+                ),
+            )
         }
     }
 

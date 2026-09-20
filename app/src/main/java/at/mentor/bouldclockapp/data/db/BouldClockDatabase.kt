@@ -14,6 +14,7 @@ import at.mentor.bouldclockapp.data.db.dao.ProblemDao
 import at.mentor.bouldclockapp.data.db.dao.SensorChunkDao
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
+import at.mentor.bouldclockapp.data.db.dao.UserProfileDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.CalorieSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.GymEntity
@@ -22,6 +23,7 @@ import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
 import at.mentor.bouldclockapp.data.db.entity.SensorChunkEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
+import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 
 @Database(
     entities = [
@@ -33,12 +35,13 @@ import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
         CalorieSampleEntity::class,
         SessionSummaryEntity::class,
         SensorChunkEntity::class,
+        UserProfileEntity::class,
     ],
     // Bei JEDER Aenderung an einer Entity hochzaehlen und eine Migration
     // ergaenzen. Bleibt die Nummer stehen, weigert sich Room beim ersten
     // Datenbankzugriff, eine vorhandene Datei zu oeffnen - die App stirbt dann
     // beim Start, ohne dass ein Test das vorher merkt.
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class BouldClockDatabase : RoomDatabase() {
@@ -51,6 +54,7 @@ abstract class BouldClockDatabase : RoomDatabase() {
     abstract fun calorieSampleDao(): CalorieSampleDao
     abstract fun sessionSummaryDao(): SessionSummaryDao
     abstract fun sensorChunkDao(): SensorChunkDao
+    abstract fun userProfileDao(): UserProfileDao
 
     companion object {
         private const val NAME = "bouldclock.db"
@@ -98,12 +102,30 @@ abstract class BouldClockDatabase : RoomDatabase() {
             }
         }
 
+        /** Nutzerprofil. SQL woertlich aus dem exportierten Schema 5.json. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `user_profile` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`weightKg` INTEGER NOT NULL, " +
+                        "`birthYear` INTEGER NOT NULL, " +
+                        "`sex` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "`syncState` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
         private fun build(context: Context): BouldClockDatabase =
             Room.databaseBuilder(context, BouldClockDatabase::class.java, NAME)
                 // Rooms Default, hier bewusst explizit: die Absturzsicherheit der
                 // laufenden Session haengt genau daran.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 // Notnagel fuer die Entwicklung: eine vergessene Migration soll
                 // die Datenbank leeren, nicht die App unstartbar machen. Vor der
                 // ersten echten Veroeffentlichung muss das hier raus, sonst
