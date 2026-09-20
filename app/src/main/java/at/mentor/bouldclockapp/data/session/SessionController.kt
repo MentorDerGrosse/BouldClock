@@ -390,19 +390,6 @@ class SessionController(
         }
     }
 
-    /** Soll-Pause mitten in der Session aendern - wirkt sofort auf die laufende Pause. */
-    suspend fun setRestTarget(restTargetMs: Long) = mutex.withLock {
-        val session = _session.value ?: return@withLock
-        val now = clock()
-        val updated = session.copy(restTargetMs = restTargetMs, meta = session.meta.touched(now))
-        sessionDao.upsert(updated)
-        _session.value = updated
-        (_phase.value as? SessionPhase.Resting)?.let { resting ->
-            _phase.value = resting.copy(targetMs = restTargetMs)
-        }
-    }
-
-    /** Beendet die Session und liefert ihre Zusammenfassung. */
     suspend fun finish(): FinishedSession? = mutex.withLock {
         val session = _session.value ?: return@withLock null
         val now = clock()
