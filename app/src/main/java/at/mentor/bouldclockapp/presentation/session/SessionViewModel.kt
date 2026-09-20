@@ -16,6 +16,8 @@ import at.mentor.bouldclockapp.data.db.entity.RecordMeta
 import at.mentor.bouldclockapp.data.sensor.SensorFilePressureSource
 import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
+import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
+import at.mentor.bouldclockapp.data.session.LiveMetrics
 import at.mentor.bouldclockapp.data.session.SessionController
 import at.mentor.bouldclockapp.data.session.SessionRecordingService
 import at.mentor.bouldclockapp.data.settings.AppSettings
@@ -23,7 +25,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -84,6 +89,28 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     val profileState: StateFlow<ProfileState> = profileDao.observe()
         .map { profile -> profile?.let(ProfileState::Present) ?: ProfileState.Missing }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ProfileState.Loading)
+
+    /** Laufende Messwerte fuer die Live-Seite. Kommen vom Aufzeichnungsdienst. */
+    val liveBpm: StateFlow<Int?> = LiveMetrics.bpm
+    val liveKcal: StateFlow<Double?> = LiveMetrics.kcal
+    val liveClimbHeightMeters: StateFlow<Double?> = LiveMetrics.elevationGainMeters
+
+    /** Versuche der laufenden Session - endlich die Verwendung fuer observeBySession. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val liveAttemptCount: StateFlow<Int> = controller.session
+        .flatMapLatest { session ->
+            if (session == null) {
+                flowOf(0)
+            } else {
+                db.attemptDao().observeBySession(session.id).map { it.size }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    /** Die letzten beendeten Sessions fuer das Fortschritt-Fenster. */
+    val recentSummaries: StateFlow<List<SessionSummaryEntity>> =
+        db.sessionSummaryDao().observeRecent(RECENT_SESSIONS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val restored = MutableStateFlow(false)
     private val choosingRest = MutableStateFlow<Long?>(null)
@@ -230,6 +257,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     private companion object {
         /** Kleiner Nachlauf, damit das Sample bei +60 s sicher geschrieben ist. */
         const val HRR_SETTLE_SLACK_MS = 2_000L
+
+        /** So viele Sessions zeigt die Uhr - alles Weitere gehoert aufs Handy. */
+        const val RECENT_SESSIONS = 10
     }
 }
 

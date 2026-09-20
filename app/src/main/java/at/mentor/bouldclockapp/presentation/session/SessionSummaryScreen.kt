@@ -26,6 +26,7 @@ import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
+import at.mentor.bouldclockapp.presentation.components.attemptLabel
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -78,7 +79,7 @@ fun SessionSummaryScreen(
             // Das Verhaeltnis nur zeigen, wenn es etwas aussagt. Bei drei Sekunden
             // an der Wand ist "1:297" rechnerisch richtig und als Aussage wertlos.
             summary.meaningfulRestRatio()?.let { ratio ->
-                item { StatRow("Verhaeltnis", "1:$ratio") }
+                item { StatRow("Verhältnis", "1:$ratio") }
             }
 
             summary.hrAvg?.let { avg ->
@@ -114,7 +115,7 @@ fun SessionSummaryScreen(
                     item {
                         StatRow(
                             label = run.gradeLabel(gradeSystem),
-                            value = run.attemptLabel(),
+                            value = attemptLabel(run.attempts),
                             note = listOfNotNull(
                                 run.boardAngleDegrees?.let { BoardAngles.format(it) },
                                 run.resultLabel(),
@@ -171,9 +172,6 @@ private fun SessionSummaryEntity.meaningfulRestRatio(): Int? {
 
 private fun AttemptRun.gradeLabel(system: GradeSystem): String =
     gradeValue?.let { Grades.label(it, system) } ?: "ohne Grad"
-
-private fun AttemptRun.attemptLabel(): String =
-    if (attempts == 1) "1 Versuch" else "$attempts Versuche"
 
 private fun AttemptRun.resultLabel(): String? = when {
     isFlash -> "Flash"

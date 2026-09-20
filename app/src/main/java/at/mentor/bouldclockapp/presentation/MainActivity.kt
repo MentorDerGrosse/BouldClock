@@ -10,11 +10,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.wear.compose.foundation.pager.VerticalPager
+import androidx.wear.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -29,6 +34,7 @@ import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.VerticalPagerScaffold
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import at.mentor.bouldclockapp.core.model.GradeSystem
@@ -36,6 +42,8 @@ import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.presentation.session.HardwareTriggerBus
 import at.mentor.bouldclockapp.presentation.components.RestDurationScreen
 import at.mentor.bouldclockapp.presentation.profile.ProfileSetupScreen
+import at.mentor.bouldclockapp.presentation.progress.ProgressScreen
+import at.mentor.bouldclockapp.presentation.session.LiveMetricsScreen
 import at.mentor.bouldclockapp.presentation.session.ProfileState
 import at.mentor.bouldclockapp.presentation.session.SessionScreen
 import at.mentor.bouldclockapp.presentation.session.SessionSummaryScreen
@@ -91,16 +99,28 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                 return@AppScaffold
             }
 
+            var showProgress by remember { mutableStateOf(false) }
+
             when (val state = uiState) {
                 // Kurz leer statt aufblitzendem Startbildschirm - sonst legt ein
                 // schneller Tap eine zweite Session neben der offenen an.
                 SessionUiState.Restoring -> Box(Modifier.fillMaxSize())
 
-                SessionUiState.NoSession -> StartSessionScreen(
-                    gradeSystem = gradeSystem,
-                    onToggleScale = viewModel::toggleGradeSystem,
-                    onStart = viewModel::chooseSession,
-                )
+                SessionUiState.NoSession -> if (showProgress) {
+                    val summaries by viewModel.recentSummaries.collectAsStateWithLifecycle()
+                    ProgressScreen(
+                        summaries = summaries,
+                        gradeSystem = gradeSystem,
+                        onBack = { showProgress = false },
+                    )
+                } else {
+                    StartSessionScreen(
+                        gradeSystem = gradeSystem,
+                        onToggleScale = viewModel::toggleGradeSystem,
+                        onStart = viewModel::chooseSession,
+                        onShowProgress = { showProgress = true },
+                    )
+                }
 
                 is SessionUiState.ChoosingRest -> ScreenScaffold {
                     RestDurationScreen(
@@ -116,17 +136,41 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                     onDismiss = viewModel::dismissSummary,
                 )
 
-                is SessionUiState.Running -> ScreenScaffold {
-                    SessionScreen(
-                        phase = state.phase,
-                        type = state.type,
-                        onTrigger = viewModel::trigger,
-                        onOutcome = viewModel::logOutcome,
-                        onGradeChange = viewModel::previewGrade,
-                        onAngleChange = viewModel::previewAngle,
-                        onNewBoulder = viewModel::confirmGradeAsNewBoulder,
-                        onFinishSession = viewModel::finishSession,
-                    )
+                // Zwei Seiten: bedienen oben, schauen unten. Der Ausloeser bleibt
+                // auf der ersten Seite, damit Datengucken keinen Versuch startet.
+                is SessionUiState.Running -> {
+                    val pagerState = rememberPagerState(pageCount = { 2 })
+                    VerticalPagerScaffold(pagerState = pagerState) {
+                        VerticalPager(state = pagerState) { page ->
+                            ScreenScaffold {
+                                if (page == 0) {
+                                    SessionScreen(
+                                        phase = state.phase,
+                                        type = state.type,
+                                        onTrigger = viewModel::trigger,
+                                        onOutcome = viewModel::logOutcome,
+                                        onGradeChange = viewModel::previewGrade,
+                                        onAngleChange = viewModel::previewAngle,
+                                        onNewBoulder = viewModel::confirmGradeAsNewBoulder,
+                                        onFinishSession = viewModel::finishSession,
+                                    )
+                                } else {
+                                    val bpm by viewModel.liveBpm.collectAsStateWithLifecycle()
+                                    val kcal by viewModel.liveKcal.collectAsStateWithLifecycle()
+                                    val height by viewModel.liveClimbHeightMeters
+                                        .collectAsStateWithLifecycle()
+                                    val attempts by viewModel.liveAttemptCount
+                                        .collectAsStateWithLifecycle()
+                                    LiveMetricsScreen(
+                                        bpm = bpm,
+                                        kcal = kcal,
+                                        climbHeightMeters = height,
+                                        attemptCount = attempts,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -183,6 +227,7 @@ private fun StartSessionScreen(
     gradeSystem: GradeSystem,
     onToggleScale: () -> Unit,
     onStart: (SessionType) -> Unit,
+    onShowProgress: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -207,6 +252,18 @@ private fun StartSessionScreen(
                     ) {
                         Text(type.displayName)
                     }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = onShowProgress,
+                    modifier = Modifier.fillMaxWidth()
+                        .transformedHeight(this, transformationSpec),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
+                    Text("Fortschritt")
                 }
             }
 
