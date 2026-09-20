@@ -3,6 +3,7 @@ package at.mentor.bouldclockapp.data.db.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -52,6 +53,22 @@ interface AttemptDao {
     )
     fun observeByProblem(problemId: String): Flow<List<AttemptEntity>>
 
+    /**
+     * Der zuletzt eingetragene Grad, ueber Sessions hinweg.
+     *
+     * Vorschlagswert der Gradabfrage. Aus der Datenbank statt aus dem Speicher,
+     * damit er einen App-Neustart ueberlebt - wer gestern 6C probiert hat,
+     * faengt heute selten bei 3 an.
+     */
+    @Query(
+        """
+        SELECT gradeValue AS gradeValue, gradeSystem AS gradeSystem FROM attempt
+        WHERE gradeValue IS NOT NULL AND deletedAt IS NULL
+        ORDER BY startedAt DESC LIMIT 1
+        """,
+    )
+    suspend fun lastGrade(): LastGrade?
+
     @Query("UPDATE attempt SET deletedAt = :now, updatedAt = :now, syncState = 'PENDING' WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 
@@ -68,8 +85,8 @@ interface AttemptDao {
         """
         SELECT
             COUNT(*)                                                      AS attemptCount,
-            SUM(CASE WHEN outcome IN ('FLASH','TOP') THEN 1 ELSE 0 END)   AS sendCount,
-            SUM(CASE WHEN outcome = 'FLASH' THEN 1 ELSE 0 END)            AS flashCount,
+            COALESCE(SUM(CASE WHEN outcome IN ('FLASH','TOP') THEN 1 ELSE 0 END), 0) AS sendCount,
+            COALESCE(SUM(CASE WHEN outcome = 'FLASH' THEN 1 ELSE 0 END), 0)         AS flashCount,
             COALESCE(SUM(endedAt - startedAt), 0)                         AS workMs,
             MAX(CASE WHEN outcome IN ('FLASH','TOP') THEN gradeValue END) AS hardestSendValue,
             AVG(hrr60)                                                    AS hrr60Avg
@@ -82,6 +99,12 @@ interface AttemptDao {
     )
     suspend fun aggregate(sessionId: String): AttemptAggregate
 }
+
+/** Projektion von [AttemptDao.lastGrade]. */
+data class LastGrade(
+    val gradeValue: Int,
+    val gradeSystem: GradeSystem?,
+)
 
 /** Projektion von [AttemptDao.aggregate]. */
 data class AttemptAggregate(

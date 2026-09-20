@@ -37,6 +37,25 @@ interface SessionDao {
     )
     suspend fun findUnfinished(): SessionEntity?
 
+    /**
+     * Setzt jede offene Session ausser [keepId] auf ABANDONED.
+     *
+     * Sichert die Regel "hoechstens eine offene Session". Ohne sie sammeln sich
+     * ACTIVE-Zeilen an, und nach dem Beenden der aktuellen holt
+     * [findUnfinished] die naechstaeltere wieder hervor - die Session wirkt dann,
+     * als liesse sie sich nicht beenden.
+     *
+     * Verworfen, nicht geloescht: die Versuche darin bleiben erhalten.
+     */
+    @Query(
+        """
+        UPDATE session
+        SET state = 'ABANDONED', updatedAt = :now, syncState = 'PENDING'
+        WHERE state IN ('ACTIVE', 'PAUSED') AND deletedAt IS NULL AND id <> :keepId
+        """,
+    )
+    suspend fun abandonOpenExcept(keepId: String, now: Long): Int
+
     @Query(
         """
         SELECT * FROM session

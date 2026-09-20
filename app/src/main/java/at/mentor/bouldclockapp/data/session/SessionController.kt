@@ -3,6 +3,7 @@ package at.mentor.bouldclockapp.data.session
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
+import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.session.SessionPhase
@@ -17,6 +18,7 @@ import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
@@ -69,6 +71,9 @@ class SessionController(
             restTargetMs = restTargetMs,
             meta = RecordMeta.now(now),
         )
+        // Vor dem Anlegen aufraeumen: die neue ID existiert noch nicht, also
+        // trifft das jede bestehende offene Session.
+        sessionDao.abandonOpenExcept(session.id, now)
         sessionDao.upsert(session)
         _session.value = session
         _phase.value = SessionPhase.Ready
@@ -83,6 +88,10 @@ class SessionController(
      */
     suspend fun resumeUnfinished(): SessionEntity? = mutex.withLock {
         val session = sessionDao.findUnfinished() ?: return@withLock null
+        // Nur die neueste offene Session wird fortgesetzt. Alles aeltere, was je
+        // offen geblieben ist, wird hier verworfen - sonst kaeme es spaeter
+        // nacheinander wieder hoch.
+        sessionDao.abandonOpenExcept(session.id, clock())
         _session.value = session
         _phase.value = restorePhase(session)
         session
@@ -95,7 +104,7 @@ class SessionController(
         val last = attemptDao.lastFinished(session.id)
         val endedAt = last?.endedAt
         return if (last != null && endedAt != null) {
-            SessionPhase.Resting(endedAt, session.restTargetMs, last.id)
+            SessionPhase.Resting(endedAt, session.restTargetMs, last.id, last.outcome)
         } else {
             SessionPhase.Ready
         }
@@ -117,6 +126,7 @@ class SessionController(
         when (val phase = _phase.value) {
             SessionPhase.Ready, is SessionPhase.Resting -> beginAttempt(session, now)
             is SessionPhase.Climbing -> endAttempt(session, phase, now)
+            is SessionPhase.Grading -> applyGrade(session, phase, now)
         }
         true
     }
@@ -165,11 +175,69 @@ class SessionController(
                 ),
             )
         }
-        // Das Ergebnis wird nicht hier abgefragt - dafuer ist die ganze Pause Zeit.
+        // Weiter zur Gradabfrage, nicht direkt in die Pause: hier steht man noch
+        // unter dem Boulder. Das Ergebnis wird spaeter abgefragt - dafuer ist die
+        // ganze Pause Zeit.
+        val suggestion = attemptDao.lastGrade()
+        _phase.value = SessionPhase.Grading(
+            attemptId = phase.attemptId,
+            endedAt = now,
+            gradeValue = suggestion?.gradeValue ?: Grades.DEFAULT_VALUE,
+            gradeSystem = suggestion?.gradeSystem ?: GradeSystem.FONT,
+        )
+    }
+
+    /**
+     * Gradauswahl im Auswahlfenster mitfuehren.
+     *
+     * Schreibt noch nichts - der Wert wandert erst beim Bestaetigen in die
+     * Datenbank. Beim Drehen am Kranz waeren das sonst dutzende Schreibvorgaenge
+     * fuer einen einzigen Wert.
+     */
+    fun previewGrade(gradeValue: Int) {
+        _phase.update { current ->
+            if (current is SessionPhase.Grading) {
+                current.copy(gradeValue = Grades.clamp(gradeValue))
+            } else {
+                current
+            }
+        }
+    }
+
+    fun previewGradeSystem(gradeSystem: GradeSystem) {
+        _phase.update { current ->
+            if (current is SessionPhase.Grading) current.copy(gradeSystem = gradeSystem) else current
+        }
+    }
+
+    /** Grad bestaetigen und in die Pause wechseln. */
+    suspend fun confirmGrade() = mutex.withLock {
+        val session = _session.value ?: return@withLock
+        val grading = _phase.value as? SessionPhase.Grading ?: return@withLock
+        applyGrade(session, grading, clock())
+    }
+
+    private suspend fun applyGrade(
+        session: SessionEntity,
+        grading: SessionPhase.Grading,
+        now: Long,
+    ) {
+        attemptDao.byId(grading.attemptId)?.let { attempt ->
+            attemptDao.upsert(
+                attempt.copy(
+                    gradeValue = grading.gradeValue,
+                    gradeSystem = grading.gradeSystem,
+                    meta = attempt.meta.touched(now),
+                ),
+            )
+        }
         _phase.value = SessionPhase.Resting(
-            since = now,
+            // Ab dem Absteigen, nicht ab dem Bestaetigen. Die Sekunden in der
+            // Gradabfrage sind bereits Erholung und muessen mitzaehlen - sonst
+            // weicht die Anzeige von restAfterMs und HRR60 ab.
+            since = grading.endedAt,
             targetMs = session.restTargetMs,
-            lastAttemptId = phase.attemptId,
+            lastAttemptId = grading.attemptId,
         )
     }
 
@@ -195,15 +263,21 @@ class SessionController(
         )
     }
 
-    /** Ergebnis nachtragen - waehrend der Pause, ohne den Ausloeser zu blockieren. */
+    /**
+     * Ergebnis nachtragen - waehrend der Pause, ohne den Ausloeser zu blockieren.
+     *
+     * [outcome] darf `null` sein: damit nimmt man einen Fehlgriff zurueck. Mit
+     * Kalk an den Fingern trifft man die falsche Taste, und ein Protokoll, das
+     * sich nicht korrigieren laesst, wird stillschweigend unehrlich.
+     */
     suspend fun logOutcome(
         attemptId: String,
-        outcome: AttemptOutcome,
+        outcome: AttemptOutcome?,
         gradeValue: Int? = null,
         gradeSystem: GradeSystem? = null,
         topMoveReached: Int? = null,
-    ) {
-        val attempt = attemptDao.byId(attemptId) ?: return
+    ) = mutex.withLock {
+        val attempt = attemptDao.byId(attemptId) ?: return@withLock
         attemptDao.upsert(
             attempt.copy(
                 outcome = outcome,
@@ -213,6 +287,10 @@ class SessionController(
                 meta = attempt.meta.touched(clock()),
             ),
         )
+        val phase = _phase.value
+        if (phase is SessionPhase.Resting && phase.lastAttemptId == attemptId) {
+            _phase.value = phase.copy(loggedOutcome = outcome)
+        }
     }
 
     /** Soll-Pause mitten in der Session aendern - wirkt sofort auf die laufende Pause. */
@@ -233,6 +311,7 @@ class SessionController(
 
         // Ein noch laufender Versuch wird beendet, nicht verschluckt.
         (_phase.value as? SessionPhase.Climbing)?.let { endAttempt(session, it, now) }
+        (_phase.value as? SessionPhase.Grading)?.let { applyGrade(session, it, now) }
         (_phase.value as? SessionPhase.Resting)?.let { settleHrr60(it.lastAttemptId) }
 
         val finished = session.copy(

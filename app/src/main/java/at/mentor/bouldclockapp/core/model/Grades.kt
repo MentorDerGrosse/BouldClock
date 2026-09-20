@@ -70,6 +70,9 @@ object Grades {
     private val DEFAULT_SYSTEM = GradeSystem.FONT
 
     const val MIN_VALUE: Int = 0
+
+    /** Vorschlag, solange es keinen letzten Grad gibt. Uebliche Hallenmitte. */
+    val DEFAULT_VALUE: Int = LABELS.getValue(GradeSystem.FONT).indexOf("6A")
     val MAX_VALUE: Int = LABELS.getValue(DEFAULT_SYSTEM).lastIndex
 
     /** Beschriftung -> Stufe, ueber alle Skalen und schreibweisenunabhaengig. */

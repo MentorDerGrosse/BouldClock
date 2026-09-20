@@ -1,12 +1,15 @@
 package at.mentor.bouldclockapp.core.session
 
+import at.mentor.bouldclockapp.core.model.AttemptOutcome
+import at.mentor.bouldclockapp.core.model.GradeSystem
+
 /**
  * Wo in der Session man gerade steht.
  *
  * Die ganze Bedienung waehrend des Boulderns laeuft ueber genau einen Ausloeser,
  * der zwischen diesen Zustaenden schaltet:
  *
- *     Ready --loesen--> Climbing --loesen--> Resting --loesen--> Climbing --> ...
+ *     Ready --> Climbing --> Grading --> Resting --> Climbing --> ...
  *
  * Entscheidend: aus [Resting] fuehrt **kein** automatischer Uebergang heraus.
  * Der Pausen-Timer ist ein Signal, kein Zustandswechsel. Laeuft er ab, vibriert
@@ -25,12 +28,38 @@ sealed interface SessionPhase {
         val startedAt: Long,
     ) : SessionPhase
 
+    /**
+     * Gradabfrage direkt nach dem Absteigen.
+     *
+     * Eigener Zustand und kein Beiwerk der Pause: hier steht man noch unter dem
+     * Boulder und weiss, was er hatte. Vorgeschlagen wird der zuletzt
+     * verwendete Grad - war es derselbe Boulder, tippt man nur weiter.
+     *
+     * [endedAt] ist der Zeitpunkt des Absteigens. Die Pause laeuft ab da, nicht
+     * ab dem Bestaetigen - sonst wuerde die Zeit, die man hier verbringt,
+     * unterschlagen, und der Pausenanzeige waere nicht mehr zu trauen.
+     */
+    data class Grading(
+        val attemptId: String,
+        val endedAt: Long,
+        val gradeValue: Int,
+        val gradeSystem: GradeSystem,
+    ) : SessionPhase
+
     /** Zwischen zwei Versuchen. */
     data class Resting(
         val since: Long,
         val targetMs: Long,
         /** Der gerade beendete Versuch - hier wird das Ergebnis nachgetragen. */
         val lastAttemptId: String,
+        /**
+         * Was fuer diesen Versuch protokolliert wurde, `null` solange nichts.
+         *
+         * Steht hier und nicht nur in der Datenbank, damit der Bildschirm es
+         * anzeigen kann. Ein Tipper, der nichts sichtbar bewirkt, ist auf einer
+         * Uhr nicht von einem danebengegangenen zu unterscheiden.
+         */
+        val loggedOutcome: AttemptOutcome? = null,
     ) : SessionPhase
 }
 
@@ -38,13 +67,20 @@ sealed interface SessionPhase {
 enum class TriggerAction(val label: String) {
     START_FIRST("Start"),
     END_ATTEMPT("Beenden"),
-    START_NEXT("Weiter"),
+
+    /** Grad bestaetigen und die Pause anzeigen. */
+    CONFIRM_GRADE("Weiter"),
+
+    /** Naechster Versuch. Bewusst dasselbe Wort wie in [START_FIRST]: */
+    /** "Start" heisst in der ganzen App "ein Versuch beginnt". */
+    START_NEXT("Start"),
 }
 
 val SessionPhase.nextAction: TriggerAction
     get() = when (this) {
         SessionPhase.Ready -> TriggerAction.START_FIRST
         is SessionPhase.Climbing -> TriggerAction.END_ATTEMPT
+        is SessionPhase.Grading -> TriggerAction.CONFIRM_GRADE
         is SessionPhase.Resting -> TriggerAction.START_NEXT
     }
 

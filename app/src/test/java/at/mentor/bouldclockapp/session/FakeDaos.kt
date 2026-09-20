@@ -36,6 +36,19 @@ class FakeSessionDao : SessionDao {
         sessions.values.filter { it.state.isOpen && it.meta.deletedAt == null }
             .maxByOrNull { it.startedAt }
 
+    override suspend fun abandonOpenExcept(keepId: String, now: Long): Int {
+        val victims = sessions.values.filter {
+            it.state.isOpen && it.meta.deletedAt == null && it.id != keepId
+        }
+        victims.forEach {
+            sessions[it.id] = it.copy(
+                state = at.mentor.bouldclockapp.core.model.SessionState.ABANDONED,
+                meta = it.meta.touched(now),
+            )
+        }
+        return victims.size
+    }
+
     override fun observeRecent(limit: Int): Flow<List<SessionEntity>> = flowOf(emptyList())
 
     override suspend fun previousComparable(
@@ -70,6 +83,12 @@ class FakeAttemptDao : AttemptDao {
         of(sessionId).filter { it.endedAt != null }.maxByOrNull { it.ordinal }
 
     override fun observeByProblem(problemId: String): Flow<List<AttemptEntity>> = flowOf(emptyList())
+
+    override suspend fun lastGrade(): at.mentor.bouldclockapp.data.db.dao.LastGrade? =
+        attempts.values
+            .filter { it.gradeValue != null && it.meta.deletedAt == null }
+            .maxByOrNull { it.startedAt }
+            ?.let { at.mentor.bouldclockapp.data.db.dao.LastGrade(it.gradeValue!!, it.gradeSystem) }
 
     override suspend fun softDelete(id: String, now: Long) {
         attempts[id]?.let { attempts[id] = it.copy(meta = it.meta.deleted(now)) }
