@@ -11,7 +11,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import at.mentor.bouldclockapp.R
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
-import at.mentor.bouldclockapp.data.health.HeartRateRecorder
+import at.mentor.bouldclockapp.data.health.ExerciseRecorder
 import at.mentor.bouldclockapp.data.sensor.RawSensorRecorder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,11 +29,11 @@ class SessionRecordingService : LifecycleService() {
 
     private val database by lazy { BouldClockDatabase.get(applicationContext) }
     private val rawRecorder by lazy { RawSensorRecorder(applicationContext) }
-    private val heartRateRecorder by lazy {
-        HeartRateRecorder(
+    private val exerciseRecorder by lazy {
+        ExerciseRecorder(
             context = applicationContext,
             hrSampleDao = database.hrSampleDao(),
-            calorieSampleDao = database.calorieSampleDao(),
+            metricSampleDao = database.metricSampleDao(),
         )
     }
 
@@ -59,12 +59,16 @@ class SessionRecordingService : LifecycleService() {
         rawRecorder.start(sessionId, startedAtMillis)
 
         pump = lifecycleScope.launch {
-            heartRateRecorder.start(sessionId)
+            exerciseRecorder.start(sessionId)
             while (isActive) {
                 delay(FLUSH_INTERVAL_MS)
                 rawRecorder.flush()
-                heartRateRecorder.flush()
-                LiveMetrics.update(heartRateRecorder.latestBpm, heartRateRecorder.latestKcal)
+                exerciseRecorder.flush()
+                LiveMetrics.update(
+                    bpm = exerciseRecorder.latestBpm,
+                    kcal = exerciseRecorder.latestKcal,
+                    elevationGainMeters = exerciseRecorder.latestElevationGain,
+                )
             }
         }
     }
@@ -83,7 +87,7 @@ class SessionRecordingService : LifecycleService() {
         // Nicht im lifecycleScope: der stirbt mit stopSelf(), und die letzten
         // Messwerte waeren weg.
         lifecycleScope.launch {
-            heartRateRecorder.stop()
+            exerciseRecorder.stop()
             chunks.forEach { database.sensorChunkDao().upsert(it) }
         }.invokeOnCompletion {
             LiveMetrics.clear()

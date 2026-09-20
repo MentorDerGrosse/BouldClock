@@ -104,6 +104,20 @@ enum class WallAngle(val displayName: String) {
 enum class SensorKind { ACCELEROMETER, GYROSCOPE, PRESSURE }
 
 /**
+ * Fortlaufend mitgezaehlte Messgroessen einer Session.
+ *
+ * Alle nach demselben Muster: ein monoton steigender Stand, den Health Services
+ * meldet. Deshalb eine gemeinsame Tabelle statt einer je Groesse - Distanz oder
+ * Schritte kaemen sonst als dritte und vierte dazu.
+ */
+enum class SessionMetric(val displayName: String, val unit: String) {
+    CALORIES("Kalorien", "kcal"),
+
+    /** Summe der ueberwundenen Hoehenmeter - beim Bouldern die Kletterhoehe. */
+    ELEVATION_GAIN("Kletterhöhe", "m"),
+}
+
+/**
  * Biologisches Geschlecht - einziger Zweck ist der Grundumsatz in der
  * Kalorienformel.
  *

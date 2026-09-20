@@ -5,6 +5,7 @@ import at.mentor.bouldclockapp.core.diagnostics.Diagnostics
 import android.os.SystemClock
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.data.Availability
+import androidx.health.services.client.data.CumulativeDataPoint
 import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.ExerciseConfig
 import androidx.health.services.client.data.ExerciseLapSummary
@@ -15,34 +16,38 @@ import androidx.health.services.client.ExerciseUpdateCallback
 import androidx.health.services.client.endExercise
 import androidx.health.services.client.getCapabilities
 import androidx.health.services.client.startExercise
-import at.mentor.bouldclockapp.data.db.dao.CalorieSampleDao
+import at.mentor.bouldclockapp.core.model.SessionMetric
+import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
-import at.mentor.bouldclockapp.data.db.entity.CalorieSampleEntity
+import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import java.time.Instant
 import kotlin.math.roundToInt
 
 /**
- * Zeichnet Puls und Kalorienverlauf ueber Health Services auf.
+ * Zeichnet Puls, Kalorien und Kletterhoehe ueber Health Services auf.
+ *
+ * Hiess frueher HeartRateRecorder - der Name stimmte schon nicht mehr, als die
+ * Kalorien dazukamen.
  *
  * Gepuffert und in Bloecken geschrieben: bei 1 Hz waere ein Datenbankzugriff je
  * Messwert zwei Stunden lang purer Verschleiss.
  *
- * Der Kalorienstand wird als Verlauf mitgeschrieben, nicht als Endsumme. Nur so
- * laesst sich spaeter auch der Anteil *an der Wand* ausrechnen - die Differenz
- * zwischen Versuchsbeginn und -ende.
+ * Kalorien und Hoehe werden als Verlauf mitgeschrieben, nicht als Endsumme. Nur
+ * so laesst sich spaeter auch der Anteil *an der Wand* ausrechnen - die
+ * Differenz zwischen Versuchsbeginn und -ende.
  */
-class HeartRateRecorder(
+class ExerciseRecorder(
     private val context: Context,
     private val hrSampleDao: HrSampleDao,
-    private val calorieSampleDao: CalorieSampleDao,
+    private val metricSampleDao: MetricSampleDao,
 ) {
 
     private val exerciseClient = HealthServices.getClient(context).exerciseClient
 
     private val buffer = Any()
     private val pendingHr = mutableListOf<HrSampleEntity>()
-    private val pendingCalories = mutableListOf<CalorieSampleEntity>()
+    private val pendingMetrics = mutableListOf<MetricSampleEntity>()
 
     private var sessionId: String? = null
     private var callback: ExerciseUpdateCallback? = null
@@ -50,6 +55,11 @@ class HeartRateRecorder(
     /** Letzter gemeldeter Kalorienstand - fuer die Live-Anzeige. */
     @Volatile
     var latestKcal: Double? = null
+        private set
+
+    /** Bisher in dieser Session geklettene Hoehe in Metern - fuer die Live-Anzeige. */
+    @Volatile
+    var latestElevationGain: Double? = null
         private set
 
     /** Letzter brauchbarer Pulswert - fuer die Live-Anzeige. */
@@ -129,33 +139,32 @@ class HeartRateRecorder(
                 )
             }
 
-            val calories = metrics.getData(DataType.CALORIES_TOTAL)?.let { point ->
-                latestKcal = point.total.toDouble()
-                CalorieSampleEntity(
-                    sessionId = sessionId,
-                    timestampMs = point.end.toEpochMilli(),
-                    kcalTotal = point.total.toDouble(),
-                )
-            }
+            val calories = metrics.getData(DataType.CALORIES_TOTAL)?.also {
+                latestKcal = it.total.toDouble()
+            }?.toSample(sessionId, SessionMetric.CALORIES)
+
+            val elevation = metrics.getData(DataType.ELEVATION_GAIN_TOTAL)?.also {
+                latestElevationGain = it.total.toDouble()
+            }?.toSample(sessionId, SessionMetric.ELEVATION_GAIN)
 
             synchronized(buffer) {
                 pendingHr += heartRates
-                calories?.let { pendingCalories += it }
+                pendingMetrics += listOfNotNull(calories, elevation)
             }
         }
     }
 
     /** Schreibt den Puffer weg. Regelmaessig aufrufen, nicht nur am Ende. */
     suspend fun flush() {
-        val (heartRates, calories) = synchronized(buffer) {
+        val (heartRates, metricSamples) = synchronized(buffer) {
             val hr = pendingHr.toList()
-            val kcal = pendingCalories.toList()
+            val metrics = pendingMetrics.toList()
             pendingHr.clear()
-            pendingCalories.clear()
-            hr to kcal
+            pendingMetrics.clear()
+            hr to metrics
         }
         if (heartRates.isNotEmpty()) hrSampleDao.insertAll(heartRates)
-        if (calories.isNotEmpty()) calorieSampleDao.insertAll(calories)
+        if (metricSamples.isNotEmpty()) metricSampleDao.insertAll(metricSamples)
     }
 
     suspend fun stop() {
@@ -167,10 +176,21 @@ class HeartRateRecorder(
         callback = null
         latestBpm = null
         latestKcal = null
+        latestElevationGain = null
     }
 
+    private fun CumulativeDataPoint<Double>.toSample(
+        sessionId: String,
+        metric: SessionMetric,
+    ) = MetricSampleEntity(
+        sessionId = sessionId,
+        metric = metric,
+        timestampMs = end.toEpochMilli(),
+        value = total,
+    )
+
     private companion object {
-        const val TAG = "BouldClockHR"
+        const val TAG = "BouldClockExercise"
 
         /** Ab "niedrig" gilt ein Wert als brauchbar, siehe SessionMetrics. */
         const val USABLE_ACCURACY = 3
@@ -178,6 +198,12 @@ class HeartRateRecorder(
         /** Bouldern bevorzugt; sonst ein allgemeines Training, damit ueberhaupt gemessen wird. */
         val PREFERRED_TYPES = listOf(ExerciseType.ROCK_CLIMBING, ExerciseType.WORKOUT)
 
-        val WANTED_DATA_TYPES = listOf(DataType.HEART_RATE_BPM, DataType.CALORIES_TOTAL)
+        val WANTED_DATA_TYPES = listOf(
+            DataType.HEART_RATE_BPM,
+            DataType.CALORIES_TOTAL,
+            // Die Uhr liefert die Kletterhoehe direkt - kein Rechnen mit
+            // Luftdruckdifferenzen und keine Hallenhoehe noetig.
+            DataType.ELEVATION_GAIN_TOTAL,
+        )
     }
 }

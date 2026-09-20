@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
-import at.mentor.bouldclockapp.data.db.dao.CalorieSampleDao
+import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.GymDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
 import at.mentor.bouldclockapp.data.db.dao.ProblemDao
@@ -16,7 +16,7 @@ import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
 import at.mentor.bouldclockapp.data.db.dao.UserProfileDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
-import at.mentor.bouldclockapp.data.db.entity.CalorieSampleEntity
+import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.GymEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
@@ -32,7 +32,7 @@ import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
         SessionEntity::class,
         AttemptEntity::class,
         HrSampleEntity::class,
-        CalorieSampleEntity::class,
+        MetricSampleEntity::class,
         SessionSummaryEntity::class,
         SensorChunkEntity::class,
         UserProfileEntity::class,
@@ -41,7 +41,7 @@ import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
     // ergaenzen. Bleibt die Nummer stehen, weigert sich Room beim ersten
     // Datenbankzugriff, eine vorhandene Datei zu oeffnen - die App stirbt dann
     // beim Start, ohne dass ein Test das vorher merkt.
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class BouldClockDatabase : RoomDatabase() {
@@ -51,7 +51,7 @@ abstract class BouldClockDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun attemptDao(): AttemptDao
     abstract fun hrSampleDao(): HrSampleDao
-    abstract fun calorieSampleDao(): CalorieSampleDao
+    abstract fun metricSampleDao(): MetricSampleDao
     abstract fun sessionSummaryDao(): SessionSummaryDao
     abstract fun sensorChunkDao(): SensorChunkDao
     abstract fun userProfileDao(): UserProfileDao
@@ -120,12 +120,41 @@ abstract class BouldClockDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Kalorien- und Hoehenverlauf in einer gemeinsamen Tabelle.
+         *
+         * Die bestehenden Kalorienzeilen wandern mit, statt weggeworfen zu
+         * werden - auch wenn es bisher nur Testdaten sind, soll eine Migration
+         * nie stillschweigend etwas loeschen.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `metric_sample` (" +
+                        "`sessionId` TEXT NOT NULL, " +
+                        "`metric` TEXT NOT NULL, " +
+                        "`timestampMs` INTEGER NOT NULL, " +
+                        "`value` REAL NOT NULL, " +
+                        "PRIMARY KEY(`sessionId`, `metric`, `timestampMs`), " +
+                        "FOREIGN KEY(`sessionId`) REFERENCES `session`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )",
+                )
+                db.execSQL(
+                    "INSERT OR IGNORE INTO metric_sample (sessionId, metric, timestampMs, value) " +
+                        "SELECT sessionId, 'CALORIES', timestampMs, kcalTotal FROM calorie_sample",
+                )
+                db.execSQL("DROP TABLE calorie_sample")
+            }
+        }
+
         private fun build(context: Context): BouldClockDatabase =
             Room.databaseBuilder(context, BouldClockDatabase::class.java, NAME)
                 // Rooms Default, hier bewusst explizit: die Absturzsicherheit der
                 // laufenden Session haengt genau daran.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                )
                 // Notnagel fuer die Entwicklung: eine vergessene Migration soll
                 // die Datenbank leeren, nicht die App unstartbar machen. Vor der
                 // ersten echten Veroeffentlichung muss das hier raus, sonst

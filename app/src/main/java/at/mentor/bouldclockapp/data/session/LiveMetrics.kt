@@ -21,10 +21,15 @@ object LiveMetrics {
     private val _kcal = MutableStateFlow<Double?>(null)
     val kcal: StateFlow<Double?> = _kcal.asStateFlow()
 
-    fun update(bpm: Int?, kcal: Double?) {
+    /** Bisher in dieser Session geklettene Hoehe in Metern. */
+    private val _elevationGainMeters = MutableStateFlow<Double?>(null)
+    val elevationGainMeters: StateFlow<Double?> = _elevationGainMeters.asStateFlow()
+
+    fun update(bpm: Int?, kcal: Double?, elevationGainMeters: Double?) {
         _bpm.value = bpm
         _kcal.value = kcal
+        _elevationGainMeters.value = elevationGainMeters
     }
 
-    fun clear() = update(null, null)
+    fun clear() = update(null, null, null)
 }
