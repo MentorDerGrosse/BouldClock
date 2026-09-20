@@ -2,18 +2,22 @@ package at.mentor.bouldclockapp.data.session
 
 import at.mentor.bouldclockapp.core.metrics.AttemptFact
 import at.mentor.bouldclockapp.core.metrics.AttemptRun
+import at.mentor.bouldclockapp.core.metrics.Barometry
+import at.mentor.bouldclockapp.core.metrics.PressureTraceSource
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.metrics.groupRuns
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.Grades
+import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.buildSessionSummary
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
+import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
@@ -47,7 +51,13 @@ class SessionController(
     private val sessionDao: SessionDao,
     private val attemptDao: AttemptDao,
     private val hrSampleDao: HrSampleDao,
+    private val metricSampleDao: MetricSampleDao,
     private val summaryDao: SessionSummaryDao,
+    /**
+     * Luftdruckverlauf fuer die Kletterhoehe. Fehlt er, bleibt die Hoehe leer -
+     * die Zusammenfassung entsteht trotzdem.
+     */
+    private val pressureTraceSource: PressureTraceSource = PressureTraceSource.None,
     /**
      * Bevorzugte Anzeigeskala. Wird bei jeder Gradabfrage frisch gelesen, damit
      * eine Umstellung sofort greift. Steht bewusst vor [clock], damit der
@@ -414,6 +424,9 @@ class SessionController(
         )
         sessionDao.upsert(finished)
 
+        // Hoehen nachtragen, bevor aggregiert wird - das Aggregat summiert sie.
+        applyClimbHeights(finished.id, now)
+
         val summary = buildSessionSummary(
             session = finished,
             aggregate = attemptDao.aggregate(finished.id),
@@ -423,6 +436,8 @@ class SessionController(
             hrMax = hrSampleDao.maxBetween(
                 finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
             ),
+            caloriesTotal = metricSampleDao.total(finished.id, SessionMetric.CALORIES),
+            caloriesOnWall = caloriesOnWall(finished.id),
             now = now,
         )
         summaryDao.upsert(summary)
@@ -443,6 +458,54 @@ class SessionController(
         _session.value = null
         _phase.value = SessionPhase.Ready
         FinishedSession(summary, runs)
+    }
+
+    /**
+     * Traegt die erreichte Hoehe je Versuch aus dem Luftdruckverlauf nach.
+     *
+     * Je Versuch und nicht ueber die ganze Session: der Sensor driftet ueber
+     * Minuten um etwa einen Meter, ueber die Sekunden eines Versuchs kaum.
+     */
+    private suspend fun applyClimbHeights(sessionId: String, now: Long) {
+        val trace = pressureTraceSource.trace(sessionId)
+        if (trace.isEmpty()) return
+
+        attemptDao.finishedBySession(sessionId).forEach { attempt ->
+            val endedAt = attempt.endedAt ?: return@forEach
+            if (attempt.climbHeightMeters != null) return@forEach
+
+            val window = trace
+                .filter { it.timestampMs in attempt.startedAt..endedAt }
+                .map { it.hpa }
+            val height = Barometry.climbHeightMeters(window) ?: return@forEach
+
+            attemptDao.upsert(
+                attempt.copy(climbHeightMeters = height, meta = attempt.meta.touched(now)),
+            )
+        }
+    }
+
+    /**
+     * Kalorien, die waehrend der Versuche verbrannt wurden.
+     *
+     * Differenz des Zaehlerstands zwischen Beginn und Ende jedes Versuchs. Der
+     * ehrlichere Massstab fuer die Trainingshaerte als der Gesamtwert, weil die
+     * Erholungszeit draussen bleibt.
+     */
+    private suspend fun caloriesOnWall(sessionId: String): Double? {
+        var sum = 0.0
+        var measured = false
+
+        attemptDao.finishedBySession(sessionId).forEach { attempt ->
+            val endedAt = attempt.endedAt ?: return@forEach
+            val before = metricSampleDao.latestAt(sessionId, SessionMetric.CALORIES, attempt.startedAt)
+            val after = metricSampleDao.latestAt(sessionId, SessionMetric.CALORIES, endedAt)
+            if (before != null && after != null) {
+                sum += (after - before).coerceAtLeast(0.0)
+                measured = true
+            }
+        }
+        return sum.takeIf { measured }
     }
 
     private suspend fun nearestHr(sessionId: String, at: Long): Int? = hrSampleDao.nearest(

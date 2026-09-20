@@ -4,8 +4,12 @@ import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
+import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
+import at.mentor.bouldclockapp.core.metrics.Barometry
+import at.mentor.bouldclockapp.core.metrics.PressurePoint
+import at.mentor.bouldclockapp.core.metrics.PressureTraceSource
 import at.mentor.bouldclockapp.core.session.RestProgress
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.core.session.TriggerAction
@@ -26,6 +30,7 @@ class SessionControllerTest {
     private lateinit var sessionDao: FakeSessionDao
     private lateinit var attemptDao: FakeAttemptDao
     private lateinit var hrDao: FakeHrSampleDao
+    private lateinit var metricDao: FakeMetricSampleDao
     private lateinit var summaryDao: FakeSummaryDao
     private lateinit var controller: SessionController
 
@@ -39,8 +44,39 @@ class SessionControllerTest {
         sessionDao = FakeSessionDao()
         attemptDao = FakeAttemptDao()
         hrDao = FakeHrSampleDao()
+        metricDao = FakeMetricSampleDao()
         summaryDao = FakeSummaryDao()
-        controller = SessionController(sessionDao, attemptDao, hrDao, summaryDao) { now }
+        controller = newController()
+    }
+
+    /** Baut einen Controller mit den Doubles - eine Stelle statt sechs. */
+    private fun newController(
+        pressure: PressureTraceSource = PressureTraceSource.None,
+        gradeSystem: GradeSystem = GradeSystem.FONT,
+    ) = SessionController(
+        sessionDao, attemptDao, hrDao, metricDao, summaryDao,
+        pressureTraceSource = pressure,
+        preferredGradeSystem = { gradeSystem },
+    ) { now }
+
+    /**
+     * Luftdruckverlauf, der zu jedem beendeten Versuch einen Aufstieg von
+     * [meters] enthaelt - erst am Boden stehen, dann hinauf.
+     */
+    private fun climbTrace(meters: Double) = PressureTraceSource { sessionId ->
+        attemptDao.attempts.values
+            .filter { it.sessionId == sessionId && it.endedAt != null }
+            .flatMap { attempt ->
+                val drop = meters / Barometry.METERS_PER_HPA
+                val end = attempt.endedAt!!
+                (0 until 40).map { i ->
+                    val anteil = ((i - 8).coerceAtLeast(0).toDouble() / 24.0).coerceIn(0.0, 1.0)
+                    PressurePoint(
+                        timestampMs = attempt.startedAt + (end - attempt.startedAt) * i / 40,
+                        hpa = 1005.70 - drop * anteil,
+                    )
+                }
+            }
     }
 
     private fun advance(ms: Long) {
@@ -151,10 +187,7 @@ class SessionControllerTest {
      */
     @Test
     fun `die Gradabfrage nutzt die eingestellte Skala`() = runTest {
-        val vScale = SessionController(
-            sessionDao, attemptDao, hrDao, summaryDao,
-            preferredGradeSystem = { GradeSystem.V_SCALE },
-        ) { now }
+        val vScale = newController(gradeSystem = GradeSystem.V_SCALE)
         vScale.start()
         vScale.trigger()
         advance(30_000)
@@ -277,7 +310,7 @@ class SessionControllerTest {
         val descendedAt = now
         advance(gradingMs); press()
 
-        val restarted = SessionController(sessionDao, attemptDao, hrDao, summaryDao) { now }
+        val restarted = newController()
         advance(90_000)
         assertTrue(restarted.resumeUnfinished() != null)
 
@@ -292,7 +325,7 @@ class SessionControllerTest {
         controller.start()
         advance(5_000); press()
 
-        val restarted = SessionController(sessionDao, attemptDao, hrDao, summaryDao) { now }
+        val restarted = newController()
         advance(20_000)
         restarted.resumeUnfinished()
 
@@ -341,7 +374,7 @@ class SessionControllerTest {
             AttemptOutcome.FLASH,
         )
 
-        val restarted = SessionController(sessionDao, attemptDao, hrDao, summaryDao) { now }
+        val restarted = newController()
         restarted.resumeUnfinished()
 
         assertEquals(
@@ -519,6 +552,80 @@ class SessionControllerTest {
         assertFalse(finished.runs[1].isSent)
     }
 
+    // --- Auswertung ---
+
+    @Test
+    fun `die Kletterhoehe wird je Versuch aus dem Luftdruck nachgetragen`() = runTest {
+        val messend = newController(pressure = climbTrace(meters = 4.0))
+        messend.start()
+        advance(5_000)
+        messend.trigger(); advance(20_000); messend.trigger()
+        advance(gradingMs); messend.trigger()
+        advance(90_000)
+        messend.trigger(); advance(20_000); messend.trigger()
+        advance(gradingMs); messend.trigger()
+        advance(10_000)
+
+        val finished = messend.finish()!!
+
+        assertEquals(4.0, attempt(1).climbHeightMeters!!, 0.4)
+        assertEquals(8.0, finished.summary.climbHeightMeters!!, 0.8)
+        assertEquals(4.0, finished.summary.maxClimbHeightMeters!!, 0.4)
+    }
+
+    /** Ohne aufgezeichneten Luftdruck entsteht die Zusammenfassung trotzdem. */
+    @Test
+    fun `ohne Luftdruckverlauf bleibt die Hoehe leer`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 20_000L)
+        advance(10_000)
+
+        val finished = controller.finish()!!
+
+        assertNull(attempt(1).climbHeightMeters)
+        assertNull(finished.summary.climbHeightMeters)
+        assertEquals(1, finished.summary.attemptCount)
+    }
+
+    /**
+     * Der Unterschied, auf den es ankommt: der Gesamtwert enthaelt die Erholung,
+     * der Wandanteil nicht.
+     */
+    @Test
+    fun `Kalorien an der Wand zaehlen nur die Zeit an der Wand`() = runTest {
+        val sessionId = controller.start().id
+        advance(5_000)
+        doAttempt(climbMs = 20_000L)
+        advance(60_000)
+        doAttempt(climbMs = 20_000L)
+        advance(30_000)
+
+        val versuche = attemptDao.attempts.values.sortedBy { it.ordinal }
+        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[0].startedAt, 10.0)
+        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[0].endedAt!!, 14.0)
+        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[1].startedAt, 20.0)
+        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[1].endedAt!!, 23.0)
+        metricDao.add(sessionId, SessionMetric.CALORIES, now, 30.0)
+
+        val finished = controller.finish()!!
+
+        assertEquals(30.0, finished.summary.caloriesTotal!!, 0.01)
+        assertEquals(7.0, finished.summary.caloriesOnWall!!, 0.01)
+    }
+
+    @Test
+    fun `ohne Kalorienmessung bleiben beide Werte leer`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 20_000L)
+
+        val finished = controller.finish()!!
+
+        assertNull(finished.summary.caloriesTotal)
+        assertNull(finished.summary.caloriesOnWall)
+    }
+
     // --- Board ---
 
     /** Am Board kommt der Winkel vor dem Grad: ohne ihn sagt der Grad nichts aus. */
@@ -661,7 +768,7 @@ class SessionControllerTest {
         advance(10_000)
         controller.finish()
 
-        val restarted = SessionController(sessionDao, attemptDao, hrDao, summaryDao) { now }
+        val restarted = newController()
         assertNull(restarted.resumeUnfinished())
         assertEquals(SessionPhase.Ready, restarted.phase.value)
         assertEquals(SessionState.ABANDONED, sessionDao.sessions.getValue("alt").state)

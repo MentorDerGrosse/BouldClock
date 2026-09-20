@@ -58,6 +58,24 @@ data class SessionSummaryEntity(
     /** Mittlere Herzfrequenz-Erholung ueber alle auswertbaren Versuche. */
     val hrr60Avg: Int? = null,
 
+    /** Gesamtverbrauch der Session. */
+    val caloriesTotal: Double? = null,
+
+    /**
+     * Anteil, der waehrend der Versuche verbrannt wurde.
+     *
+     * Der ehrlichere Massstab fuer "wie hart war das Training": er laesst genau
+     * die Erholungszeit weg, die die generische Berechnung faelschlich als
+     * Anstrengung zaehlt.
+     */
+    val caloriesOnWall: Double? = null,
+
+    /** Summe der erreichten Hoehen aller Versuche. */
+    val climbHeightMeters: Double? = null,
+
+    /** Hoechster einzelner Boulder des Abends. */
+    val maxClimbHeightMeters: Double? = null,
+
     val rpe: Int? = null,
     val computedAt: Long,
 ) {

@@ -71,7 +71,7 @@ fun SessionScreen(
             BigState(
                 value = phase.nextAction.label,
                 caption = "Tippen startet den Versuch",
-                hint = "lang druecken: Session beenden",
+                hint = "lang drücken: Session beenden",
             )
         }
 

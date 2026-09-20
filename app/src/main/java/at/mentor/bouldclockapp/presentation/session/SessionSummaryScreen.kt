@@ -26,7 +26,9 @@ import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
+import at.mentor.bouldclockapp.presentation.components.attemptLabel
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -68,17 +70,36 @@ fun SessionSummaryScreen(
             summary.sendRate?.let { rate ->
                 item { StatRow("Quote", "${(rate * 100).roundToInt()} %") }
             }
-            item { StatRow("An der Wand", formatDuration(summary.workMs)) }
+            // "Wandzeit" statt "An der Wand" - weiter unten steht der
+            // Kalorienanteil an der Wand, und zweimal dieselbe Beschriftung
+            // fuer Zeit und Energie waere genau die Zweideutigkeit von neulich.
+            item { StatRow("Wandzeit", formatDuration(summary.workMs)) }
             item { StatRow("Pause", formatDuration(summary.restMs)) }
 
             // Das Verhaeltnis nur zeigen, wenn es etwas aussagt. Bei drei Sekunden
             // an der Wand ist "1:297" rechnerisch richtig und als Aussage wertlos.
             summary.meaningfulRestRatio()?.let { ratio ->
-                item { StatRow("Verhaeltnis", "1:$ratio") }
+                item { StatRow("Verhältnis", "1:$ratio") }
             }
 
             summary.hrAvg?.let { avg ->
                 item { StatRow("Puls", summary.hrMax?.let { "$avg / $it" } ?: "$avg") }
+            }
+
+            summary.caloriesTotal?.let { total ->
+                item { StatRow("Kalorien", "${total.roundToInt()} kcal") }
+            }
+            // Der ehrlichere Massstab fuer die Trainingshaerte: ohne die
+            // Erholung, die die generische Berechnung als Anstrengung mitzaehlt.
+            summary.caloriesOnWall?.let { onWall ->
+                item { StatRow("davon Wand", "${onWall.roundToInt()} kcal") }
+            }
+
+            summary.climbHeightMeters?.let { meters ->
+                item { StatRow("Kletterhöhe", formatMeters(meters)) }
+            }
+            summary.maxClimbHeightMeters?.let { meters ->
+                item { StatRow("Höchster", formatMeters(meters)) }
             }
 
             if (finished.runs.isNotEmpty()) {
@@ -94,7 +115,7 @@ fun SessionSummaryScreen(
                     item {
                         StatRow(
                             label = run.gradeLabel(gradeSystem),
-                            value = run.attemptLabel(),
+                            value = attemptLabel(run.attempts),
                             note = listOfNotNull(
                                 run.boardAngleDegrees?.let { BoardAngles.format(it) },
                                 run.resultLabel(),
@@ -152,14 +173,14 @@ private fun SessionSummaryEntity.meaningfulRestRatio(): Int? {
 private fun AttemptRun.gradeLabel(system: GradeSystem): String =
     gradeValue?.let { Grades.label(it, system) } ?: "ohne Grad"
 
-private fun AttemptRun.attemptLabel(): String =
-    if (attempts == 1) "1 Versuch" else "$attempts Versuche"
-
 private fun AttemptRun.resultLabel(): String? = when {
     isFlash -> "Flash"
     isSent -> "Top"
     else -> null
 }
+
+private fun formatMeters(meters: Double): String =
+    String.format(Locale.GERMAN, "%.1f m", meters)
 
 /** "42:07" unter einer Stunde, sonst "1:24:07". */
 private fun formatDuration(ms: Long): String {
@@ -195,6 +216,10 @@ private fun SessionSummaryPreview() {
                     hardestSendValue = Grades.parse("7A"),
                     hrAvg = 128,
                     hrMax = 171,
+                    caloriesTotal = 412.0,
+                    caloriesOnWall = 96.0,
+                    climbHeightMeters = 41.4,
+                    maxClimbHeightMeters = 4.6,
                     computedAt = 0L,
                 ),
                 runs = listOf(

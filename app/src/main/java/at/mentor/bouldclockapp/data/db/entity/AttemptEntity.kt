@@ -77,6 +77,15 @@ data class AttemptEntity(
     val topMoveReached: Int? = null,
 
     /**
+     * Erreichte Hoehe in Metern, aus dem Luftdruckverlauf des Versuchs.
+     *
+     * Am Versuch und nicht an der Session, weil der Sensor nur ueber kurze
+     * Zeitraeume genau ist - siehe [at.mentor.bouldclockapp.core.metrics.Barometry].
+     * Die Kletterhoehe des Abends ist die Summe dieser Werte.
+     */
+    val climbHeightMeters: Double? = null,
+
+    /**
      * Neigung des Boards in Grad, nur im Board-Modus gesetzt.
      *
      * Am Versuch und nicht an der Session: an einem Abend wird umgestellt, und

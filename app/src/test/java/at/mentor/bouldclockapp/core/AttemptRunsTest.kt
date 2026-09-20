@@ -103,3 +103,13 @@ class AttemptRunsTest {
         assertTrue(groupRuns(emptyList()).isEmpty())
     }
 }
+
+class LabelsTest {
+
+    @Test
+    fun `die Einzahl heisst Versuch`() {
+        assertEquals("1 Versuch", at.mentor.bouldclockapp.presentation.components.attemptLabel(1))
+        assertEquals("2 Versuche", at.mentor.bouldclockapp.presentation.components.attemptLabel(2))
+        assertEquals("0 Versuche", at.mentor.bouldclockapp.presentation.components.attemptLabel(0))
+    }
+}

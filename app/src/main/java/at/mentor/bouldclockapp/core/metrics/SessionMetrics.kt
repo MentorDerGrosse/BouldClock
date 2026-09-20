@@ -14,10 +14,14 @@ object SessionMetrics {
 
     /**
      * Mindestgenauigkeit, ab der ein Pulswert verwendet wird.
-     * Waehrend eines Zuges liefert der optische Sensor am Handgelenk regelmaessig
-     * Mist - gebeugtes Gelenk, kontrahierter Unterarm, Griffdruck.
+     *
+     * Skala von Health Services: 0 unbekannt, 1 kein Hautkontakt, 2 unzuverlaessig,
+     * 3 niedrig, 4 mittel, 5 hoch. Ab 3 wird gerechnet - waehrend eines Zuges
+     * liefert der optische Sensor am Handgelenk regelmaessig Mist (gebeugtes
+     * Gelenk, kontrahierter Unterarm, Griffdruck), und "niedrig" ist dort schon
+     * das Erreichbare.
      */
-    const val MIN_HR_ACCURACY: Int = 1
+    const val MIN_HR_ACCURACY: Int = 3
 
     /**
      * Herzfrequenz-Erholung ueber 60 s, in Schlaegen.

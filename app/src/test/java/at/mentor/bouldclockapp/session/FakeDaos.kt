@@ -1,15 +1,18 @@
 package at.mentor.bouldclockapp.session
 
+import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.data.db.dao.AttemptAggregate
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
+import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.data.db.dao.SessionBaseline
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
+import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import kotlinx.coroutines.flow.Flow
@@ -126,6 +129,8 @@ class FakeAttemptDao : AttemptDao {
             workMs = done.sumOf { (it.endedAt ?: 0L) - it.startedAt },
             hardestSendValue = done.filter { it.outcome?.isSend == true }.mapNotNull { it.gradeValue }.maxOrNull(),
             hrr60Avg = done.mapNotNull { it.hrr60 }.map { it.toDouble() }.average().takeIf { !it.isNaN() },
+            climbHeightMeters = done.mapNotNull { it.climbHeightMeters }.sum().takeIf { it > 0.0 },
+            maxClimbHeightMeters = done.mapNotNull { it.climbHeightMeters }.maxOrNull(),
         )
     }
 }
@@ -155,6 +160,29 @@ class FakeHrSampleDao(private val samples: MutableList<HrSampleEntity> = mutable
 
     override suspend fun maxBetween(sessionId: String, from: Long, to: Long, minAccuracy: Int): Int? =
         between(sessionId, from, to).filter { it.accuracy >= minAccuracy }.maxOfOrNull { it.bpm }
+
+    override suspend fun deleteForSession(sessionId: String) {
+        samples.removeAll { it.sessionId == sessionId }
+    }
+}
+
+class FakeMetricSampleDao : MetricSampleDao {
+    val samples = mutableListOf<MetricSampleEntity>()
+
+    fun add(sessionId: String, metric: SessionMetric, at: Long, value: Double) {
+        samples += MetricSampleEntity(sessionId, metric, at, value)
+    }
+
+    override suspend fun insertAll(samples: List<MetricSampleEntity>) {
+        this.samples += samples
+    }
+
+    override suspend fun total(sessionId: String, metric: SessionMetric): Double? =
+        samples.filter { it.sessionId == sessionId && it.metric == metric }.maxOfOrNull { it.value }
+
+    override suspend fun latestAt(sessionId: String, metric: SessionMetric, at: Long): Double? =
+        samples.filter { it.sessionId == sessionId && it.metric == metric && it.timestampMs <= at }
+            .maxByOrNull { it.timestampMs }?.value
 
     override suspend fun deleteForSession(sessionId: String) {
         samples.removeAll { it.sessionId == sessionId }
