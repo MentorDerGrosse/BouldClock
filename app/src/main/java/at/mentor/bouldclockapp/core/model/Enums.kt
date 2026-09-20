@@ -27,6 +27,13 @@ enum class SessionType(
 
     /** Ein Projekt, viele Burns. */
     PROJECT("Projekt", 4 * 60_000L),
+
+    /**
+     * Pause selbst gewaehlt. Eigener Typ und nicht bloss ein abweichender Wert,
+     * damit Vergleiche ehrlich bleiben - eine Session mit selbstgesetzter Pause
+     * ist mit einer Limit-Session nicht ohne Weiteres vergleichbar.
+     */
+    CUSTOM("Benutzerdefiniert", 3 * 60_000L),
 }
 
 enum class SessionState {
@@ -49,18 +56,18 @@ enum class AttemptOutcome(val displayName: String) {
     FLASH("Flash"),
     TOP("Top"),
 
-    /** Wettkampf-Zone erreicht, aber kein Top. */
+    /**
+     * Wettkampf-Zone erreicht, aber kein Top.
+     *
+     * Bewusst nicht in der normalen Bedienung: Hallenboulder haben keine Zone,
+     * das ist eine Wertung aus dem Wettkampf. Gehoert spaeter in einen eigenen
+     * Wettkampfmodus, nicht neben Flash und Top in den Alltag.
+     */
     ZONE("Zone"),
     FAIL("Sturz"),
-
-    /** Abgebrochen - zaehlt nicht in die Statistik. */
-    ABORTED("Abbruch"),
     ;
 
     val isSend: Boolean get() = this == FLASH || this == TOP
-
-    /** Zaehlt der Versuch als echter Belastungsversuch? */
-    val countsAsAttempt: Boolean get() = this != ABORTED
 }
 
 enum class WallAngle(val displayName: String) {

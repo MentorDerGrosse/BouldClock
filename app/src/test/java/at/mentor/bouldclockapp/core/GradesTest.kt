@@ -2,6 +2,7 @@ package at.mentor.bouldclockapp.core
 
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
+import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.model.RestDurations
 import at.mentor.bouldclockapp.core.model.SessionType
 import org.junit.Assert.assertEquals
@@ -87,31 +88,61 @@ class GradesTest {
 
 class RestDurationsTest {
 
+    /**
+     * Der Grund fuer die Untergrenze: kuerzer als das Messfenster darf die
+     * Soll-Pause nicht sein, sonst faellt der naechste Versuch hinein und HRR60
+     * waere nicht mehr erhebbar.
+     */
     @Test
-    fun `Optionen sind aufsteigend und eindeutig`() {
-        assertEquals(RestDurations.OPTIONS.sorted(), RestDurations.OPTIONS)
-        assertEquals(RestDurations.OPTIONS.distinct(), RestDurations.OPTIONS)
+    fun `die Untergrenze deckt das HRR60-Fenster ab`() {
+        assertTrue(RestDurations.MIN_MS >= SessionMetrics.HRR_WINDOW_MS)
     }
 
     @Test
-    fun `Formatierung ist mmss`() {
-        assertEquals("0:30", RestDurations.format(30_000L))
-        assertEquals("3:00", RestDurations.format(180_000L))
-        assertEquals("15:00", RestDurations.format(900_000L))
+    fun `Minuten und Sekunden ergeben die Dauer`() {
+        assertEquals(60_000L, RestDurations.of(1, 0))
+        assertEquals(210_000L, RestDurations.of(3, 30))
+        assertEquals("3:30", RestDurations.format(RestDurations.of(3, 30)))
+        assertEquals("1:00", RestDurations.format(RestDurations.MIN_MS))
     }
 
     @Test
-    fun `gespeicherte Werte rasten auf den naechsten Eintrag ein`() {
-        assertEquals(180_000L, RestDurations.snap(175_000L))
-        assertEquals(RestDurations.MIN_MS, RestDurations.snap(1L))
-        assertEquals(RestDurations.MAX_MS, RestDurations.snap(99 * 60_000L))
+    fun `clamp haelt die Dauer im waehlbaren Bereich`() {
+        assertEquals(RestDurations.MIN_MS, RestDurations.clamp(0L))
+        assertEquals(RestDurations.MIN_MS, RestDurations.clamp(30_000L))
+        assertEquals(RestDurations.MAX_MS, RestDurations.clamp(99 * 60_000L))
+    }
+
+    @Test
+    fun `Zerlegen und Zusammensetzen ergibt denselben Wert`() {
+        RestDurations.MINUTES.forEach { minutes ->
+            RestDurations.SECONDS.forEach { seconds ->
+                val ms = RestDurations.of(minutes, seconds)
+                assertEquals(minutes, RestDurations.minutesOf(ms))
+                assertEquals(seconds, RestDurations.secondsOf(ms))
+            }
+        }
+    }
+
+    /** Gespeicherte Werte muessen nicht auf dem Viertelminuten-Raster liegen. */
+    @Test
+    fun `krumme Sekunden rasten auf das naechste Viertel ein`() {
+        assertEquals(30, RestDurations.secondsOf(RestDurations.of(2, 0) + 28_000L))
+        assertEquals(0, RestDurations.secondsOf(RestDurations.of(2, 0) + 4_000L))
+        assertTrue(RestDurations.secondIndexOf(RestDurations.of(2, 45)) in RestDurations.SECONDS.indices)
+    }
+
+    @Test
+    fun `der Trainingshinweis trennt kurze von langen Pausen`() {
+        assertEquals("Kraftausdauer", RestDurations.trainingHint(RestDurations.of(1, 0)))
+        assertEquals("Maximalkraft", RestDurations.trainingHint(RestDurations.of(5, 0)))
     }
 
     @Test
     fun `jeder Sessiontyp hat eine waehlbare Voreinstellung`() {
         SessionType.entries.forEach { type ->
             assertTrue(type.displayName.isNotBlank())
-            assertEquals(type.defaultRestMs, RestDurations.snap(type.defaultRestMs))
+            assertEquals(type.defaultRestMs, RestDurations.clamp(type.defaultRestMs))
         }
     }
 

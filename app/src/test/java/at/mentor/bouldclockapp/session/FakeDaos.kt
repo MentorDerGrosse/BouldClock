@@ -84,6 +84,13 @@ class FakeAttemptDao : AttemptDao {
 
     override fun observeByProblem(problemId: String): Flow<List<AttemptEntity>> = flowOf(emptyList())
 
+    override suspend fun finishedBySession(sessionId: String): List<AttemptEntity> =
+        of(sessionId).filter { it.endedAt != null }.sortedBy { it.ordinal }
+
+    override suspend fun delete(id: String) {
+        attempts.remove(id)
+    }
+
     override suspend fun lastGradeValue(): Int? =
         attempts.values
             .filter { it.gradeValue != null && it.meta.deletedAt == null }
@@ -95,7 +102,7 @@ class FakeAttemptDao : AttemptDao {
     }
 
     override suspend fun aggregate(sessionId: String): AttemptAggregate {
-        val done = of(sessionId).filter { it.endedAt != null && it.outcome?.countsAsAttempt != false }
+        val done = of(sessionId).filter { it.endedAt != null }
         return AttemptAggregate(
             attemptCount = done.size,
             sendCount = done.count { it.outcome?.isSend == true },

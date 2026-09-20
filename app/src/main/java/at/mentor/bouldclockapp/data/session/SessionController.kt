@@ -1,6 +1,9 @@
 package at.mentor.bouldclockapp.data.session
 
+import at.mentor.bouldclockapp.core.metrics.AttemptFact
+import at.mentor.bouldclockapp.core.metrics.AttemptRun
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
+import at.mentor.bouldclockapp.core.metrics.groupRuns
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
@@ -15,6 +18,7 @@ import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
+import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -166,6 +170,17 @@ class SessionController(
 
     private suspend fun endAttempt(session: SessionEntity, phase: SessionPhase.Climbing, now: Long) {
         val attempt = attemptDao.byId(phase.attemptId)
+
+        // Fehlstart: in der Tasche ausgeloest, zu frueh getippt, doch nicht
+        // losgeklettert. Spurlos verwerfen und zurueck in den vorigen Zustand -
+        // eine laufende Pause laeuft dadurch ungestoert weiter, weil sie ab dem
+        // Absteigen des *vorigen* Versuchs zaehlt.
+        if (attempt != null && now - attempt.startedAt < MIN_ATTEMPT_MS) {
+            attemptDao.delete(attempt.id)
+            _phase.value = restorePhase(session)
+            return
+        }
+
         if (attempt != null) {
             attemptDao.upsert(
                 attempt.copy(
@@ -312,8 +327,9 @@ class SessionController(
         }
     }
 
-    suspend fun finish() = mutex.withLock {
-        val session = _session.value ?: return@withLock
+    /** Beendet die Session und liefert ihre Zusammenfassung. */
+    suspend fun finish(): FinishedSession? = mutex.withLock {
+        val session = _session.value ?: return@withLock null
         val now = clock()
 
         // Ein noch laufender Versuch wird beendet, nicht verschluckt.
@@ -327,21 +343,34 @@ class SessionController(
             meta = session.meta.touched(now),
         )
         sessionDao.upsert(finished)
-        summaryDao.upsert(
-            buildSessionSummary(
-                session = finished,
-                aggregate = attemptDao.aggregate(finished.id),
-                hrAvg = hrSampleDao.avgBetween(
-                    finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
-                ),
-                hrMax = hrSampleDao.maxBetween(
-                    finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
-                ),
-                now = now,
+
+        val summary = buildSessionSummary(
+            session = finished,
+            aggregate = attemptDao.aggregate(finished.id),
+            hrAvg = hrSampleDao.avgBetween(
+                finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
             ),
+            hrMax = hrSampleDao.maxBetween(
+                finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
+            ),
+            now = now,
         )
+        summaryDao.upsert(summary)
+
+        val runs = groupRuns(
+            attemptDao.finishedBySession(finished.id).map { attempt ->
+                AttemptFact(
+                    gradeValue = attempt.gradeValue,
+                    isSend = attempt.outcome?.isSend == true,
+                    workMs = (attempt.endedAt ?: attempt.startedAt) - attempt.startedAt,
+                    hrMax = attempt.hrMax,
+                )
+            },
+        )
+
         _session.value = null
         _phase.value = SessionPhase.Ready
+        FinishedSession(summary, runs)
     }
 
     private suspend fun nearestHr(sessionId: String, at: Long): Int? = hrSampleDao.nearest(
@@ -354,5 +383,14 @@ class SessionController(
     private companion object {
         /** Prellschutz. Zwei Versuche innerhalb einer halben Sekunde gibt es nicht. */
         const val MIN_TRIGGER_INTERVAL_MS = 400L
+
+        /** Kuerzer als das war kein Versuch, sondern ein Fehlgriff am Bildschirm. */
+        const val MIN_ATTEMPT_MS = 3_000L
     }
 }
+
+/** Ergebnis einer beendeten Session, wie es der Zusammenfassungsbildschirm braucht. */
+data class FinishedSession(
+    val summary: SessionSummaryEntity,
+    val runs: List<AttemptRun>,
+)

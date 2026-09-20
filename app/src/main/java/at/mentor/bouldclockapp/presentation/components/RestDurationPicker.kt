@@ -2,11 +2,13 @@ package at.mentor.bouldclockapp.presentation.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -14,8 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.MaterialTheme
-import androidx.wear.compose.material3.Picker
+import androidx.wear.compose.material3.PickerGroup
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.rememberPickerState
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
@@ -24,12 +27,10 @@ import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
 
 /**
- * Soll-Pause zwischen zwei Versuchen, per Drehkranz.
+ * Pausenlaenge als Minuten und Sekunden, zwei Raeder nebeneinander.
  *
- * Nicht zu verwechseln mit dem 60-Sekunden-Fenster der Herzfrequenz-Erholung:
- * das ist ein fester Messzeitraum, dies hier ist deine Trainingsentscheidung.
- * Sie greifen nur insofern ineinander, als bei einer Soll-Pause unter 60 s kein
- * HRR60 mehr erhoben werden kann - der naechste Versuch faellt dann ins Fenster.
+ * Antippen waehlt das Rad, der Drehkranz stellt es. Minuten ab eins - unter
+ * einer Minute liesse sich HRR60 nicht mehr erheben.
  */
 @Composable
 fun RestDurationPicker(
@@ -37,84 +38,125 @@ fun RestDurationPicker(
     onValueChange: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val options = RestDurations.OPTIONS
-    val pickerState = rememberPickerState(
-        initialNumberOfOptions = options.size,
-        initiallySelectedIndex = RestDurations.nearestIndex(valueMs),
+    val minuteState = rememberPickerState(
+        initialNumberOfOptions = RestDurations.MINUTES.size,
+        initiallySelectedIndex = RestDurations.minuteIndexOf(valueMs),
         shouldRepeatOptions = false,
     )
+    val secondState = rememberPickerState(
+        initialNumberOfOptions = RestDurations.SECONDS.size,
+        initiallySelectedIndex = RestDurations.secondIndexOf(valueMs),
+        shouldRepeatOptions = false,
+    )
+    var minutesActive by remember { mutableStateOf(true) }
 
-    LaunchedEffect(pickerState) {
-        snapshotFlow { pickerState.selectedOptionIndex }
-            .collect { index -> options.getOrNull(index)?.let(onValueChange) }
+    LaunchedEffect(minuteState, secondState) {
+        snapshotFlow { minuteState.selectedOptionIndex to secondState.selectedOptionIndex }
+            .collect { (minuteIndex, secondIndex) ->
+                onValueChange(
+                    RestDurations.of(
+                        minutes = RestDurations.MINUTES.getOrElse(minuteIndex) { 1 },
+                        seconds = RestDurations.SECONDS.getOrElse(secondIndex) { 0 },
+                    ),
+                )
+            }
     }
 
-    Picker(
-        state = pickerState,
-        contentDescription = {
-            RestDurations.format(options.getOrElse(pickerState.selectedOptionIndex) { valueMs })
-        },
+    PickerGroup(
         modifier = modifier,
-    ) { index ->
-        val isSelected = index == selectedOptionIndex
+        selectedPickerState = if (minutesActive) minuteState else secondState,
+    ) {
+        PickerGroupItem(
+            pickerState = minuteState,
+            selected = minutesActive,
+            onSelected = { minutesActive = true },
+            contentDescription = {
+                "${RestDurations.MINUTES.getOrElse(minuteState.selectedOptionIndex) { 1 }} Minuten"
+            },
+        ) { index, pickerSelected ->
+            PickerNumber(
+                text = RestDurations.MINUTES.getOrElse(index) { 1 }.toString(),
+                highlighted = pickerSelected && index == selectedOptionIndex,
+            )
+        }
+
         Text(
-            text = RestDurations.format(options.getOrElse(index) { 0L }),
-            textAlign = TextAlign.Center,
-            style = if (isSelected) {
-                MaterialTheme.typography.numeralMedium
-            } else {
-                MaterialTheme.typography.numeralSmall
-            },
-            color = if (isSelected) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            text = ":",
+            style = MaterialTheme.typography.numeralSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        PickerGroupItem(
+            pickerState = secondState,
+            selected = !minutesActive,
+            onSelected = { minutesActive = false },
+            contentDescription = {
+                "${RestDurations.SECONDS.getOrElse(secondState.selectedOptionIndex) { 0 }} Sekunden"
+            },
+        ) { index, pickerSelected ->
+            PickerNumber(
+                text = RestDurations.SECONDS.getOrElse(index) { 0 }.toString().padStart(2, '0'),
+                highlighted = pickerSelected && index == selectedOptionIndex,
+            )
+        }
     }
 }
 
-/** Pausenauswahl mit Begruendung darunter - warum diese Laenge zu diesem Training passt. */
 @Composable
-fun RestDurationPickerWithHint(
+private fun PickerNumber(text: String, highlighted: Boolean) {
+    Text(
+        text = text,
+        textAlign = TextAlign.Center,
+        style = if (highlighted) {
+            MaterialTheme.typography.numeralMedium
+        } else {
+            MaterialTheme.typography.numeralSmall
+        },
+        color = if (highlighted) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
+}
+
+/** Auswahlbildschirm fuer die Pause, mit Hinweis was die Laenge trainiert. */
+@Composable
+fun RestDurationScreen(
     valueMs: Long,
     onValueChange: (Long) -> Unit,
+    onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(start = 8.dp, end = 8.dp, top = 22.dp, bottom = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        RestDurationPicker(valueMs = valueMs, onValueChange = onValueChange)
+        RestDurationPicker(
+            valueMs = valueMs,
+            onValueChange = onValueChange,
+            modifier = Modifier.weight(1f),
+        )
         Text(
-            text = restHint(valueMs),
-            textAlign = TextAlign.Center,
+            text = RestDurations.trainingHint(valueMs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        CompactButton(
+            onClick = onConfirm,
+            label = { Text("Start", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
+        )
     }
-}
-
-/**
- * Was die gewaehlte Pause trainiert.
- *
- * Steht hier, weil es die haeufigste stille Fehlentscheidung im Bouldern ist:
- * man will an Maximalkraft arbeiten, pausiert eine Minute und trainiert
- * versehentlich Kraftausdauer.
- */
-private fun restHint(valueMs: Long): String = when {
-    valueMs < 60_000L -> "Kraftausdauer, kein HRR60"
-    valueMs < 150_000L -> "Kraftausdauer"
-    valueMs < 300_000L -> "gemischt"
-    else -> "Maximalkraft"
 }
 
 @WearPreviewDevices
 @Composable
-private fun RestDurationPickerPreview() {
+private fun RestDurationPreview() {
     BouldClockAppTheme {
         var rest by remember { mutableLongStateOf(SessionType.LIMIT.defaultRestMs) }
-        RestDurationPickerWithHint(valueMs = rest, onValueChange = { rest = it })
+        RestDurationScreen(valueMs = rest, onValueChange = { rest = it }, onConfirm = {})
     }
 }

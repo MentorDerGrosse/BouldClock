@@ -46,6 +46,26 @@ interface AttemptDao {
     )
     suspend fun lastFinished(sessionId: String): AttemptEntity?
 
+    /** Beendete Versuche in zeitlicher Reihenfolge - Grundlage der Zusammenfassung. */
+    @Query(
+        """
+        SELECT * FROM attempt
+        WHERE sessionId = :sessionId AND deletedAt IS NULL AND endedAt IS NOT NULL
+        ORDER BY ordinal
+        """,
+    )
+    suspend fun finishedBySession(sessionId: String): List<AttemptEntity>
+
+    /**
+     * Endgueltig loeschen.
+     *
+     * Nur fuer Versuche, die es nie gab - ein Fehlstart, der nach Sekunden
+     * wieder beendet wird. Ein Soft Delete waere hier falsch: er hinterliesse
+     * eine Luecke in der Nummerierung fuer etwas, das nie passiert ist.
+     */
+    @Query("DELETE FROM attempt WHERE id = :id")
+    suspend fun delete(id: String)
+
     /** Projektverlauf: alle Versuche an einem Boulder ueber Sessions hinweg. */
     @Query(
         "SELECT * FROM attempt WHERE problemId = :problemId AND deletedAt IS NULL ORDER BY startedAt",
@@ -78,9 +98,8 @@ interface AttemptDao {
     /**
      * Aggregat fuer die Zusammenfassung - eine Abfrage statt N Zeilen in den Speicher.
      *
-     * ABORTED bleibt draussen: ein abgebrochener Versuch ist keine Belastung.
-     * Ein Versuch ohne Ergebnis zaehlt dagegen mit: nach dem Ausloeser beendet man
-     * den Burn, das Ergebnis tippt man erst in der Pause - und manchmal gar nicht.
+     * Ein Versuch ohne Ergebnis zaehlt mit: nach dem Ausloeser beendet man den
+     * Burn, das Ergebnis tippt man erst in der Pause - und manchmal gar nicht.
      * Stattgefunden hat er trotzdem. Als Send zaehlt nur, was ausdruecklich
      * protokolliert wurde.
      */
@@ -97,7 +116,6 @@ interface AttemptDao {
         WHERE sessionId = :sessionId
           AND deletedAt IS NULL
           AND endedAt IS NOT NULL
-          AND (outcome IS NULL OR outcome <> 'ABORTED')
         """,
     )
     suspend fun aggregate(sessionId: String): AttemptAggregate

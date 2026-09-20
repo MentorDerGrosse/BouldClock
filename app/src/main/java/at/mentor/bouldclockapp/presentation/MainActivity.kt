@@ -27,7 +27,9 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.presentation.session.HardwareTriggerBus
+import at.mentor.bouldclockapp.presentation.components.RestDurationScreen
 import at.mentor.bouldclockapp.presentation.session.SessionScreen
+import at.mentor.bouldclockapp.presentation.session.SessionSummaryScreen
 import at.mentor.bouldclockapp.presentation.session.SessionUiState
 import at.mentor.bouldclockapp.presentation.session.SessionViewModel
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
@@ -63,19 +65,32 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                 triggerBus.events.collect { viewModel.trigger() }
             }
 
+            val gradeSystem by viewModel.gradeSystem.collectAsStateWithLifecycle()
+
             when (val state = uiState) {
                 // Kurz leer statt aufblitzendem Startbildschirm - sonst legt ein
                 // schneller Tap eine zweite Session neben der offenen an.
                 SessionUiState.Restoring -> Box(Modifier.fillMaxSize())
 
-                SessionUiState.NoSession -> {
-                    val gradeSystem by viewModel.gradeSystem.collectAsStateWithLifecycle()
-                    StartSessionScreen(
-                        gradeSystem = gradeSystem,
-                        onToggleScale = viewModel::toggleGradeSystem,
-                        onStart = viewModel::startSession,
+                SessionUiState.NoSession -> StartSessionScreen(
+                    gradeSystem = gradeSystem,
+                    onToggleScale = viewModel::toggleGradeSystem,
+                    onStart = viewModel::chooseSession,
+                )
+
+                is SessionUiState.ChoosingRest -> ScreenScaffold {
+                    RestDurationScreen(
+                        valueMs = state.restTargetMs,
+                        onValueChange = viewModel::setCustomRest,
+                        onConfirm = viewModel::confirmCustomSession,
                     )
                 }
+
+                is SessionUiState.Summary -> SessionSummaryScreen(
+                    finished = state.finished,
+                    gradeSystem = gradeSystem,
+                    onDismiss = viewModel::dismissSummary,
+                )
 
                 is SessionUiState.Running -> ScreenScaffold {
                     SessionScreen(

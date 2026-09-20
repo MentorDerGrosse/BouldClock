@@ -349,6 +349,79 @@ class SessionControllerTest {
         )
     }
 
+    /**
+     * In der Tasche ausgeloest oder zu frueh getippt. Solche Versuche sollen
+     * spurlos verschwinden statt die Statistik mit Null-Sekunden-Burns zu fuellen.
+     */
+    @Test
+    fun `ein Fehlstart unter drei Sekunden wird verworfen`() = runTest {
+        controller.start()
+        advance(5_000); press()
+        advance(1_000); press()
+
+        assertEquals(SessionPhase.Ready, controller.phase.value)
+        assertTrue(attemptDao.attempts.isEmpty())
+    }
+
+    @Test
+    fun `ein Fehlstart waehrend der Pause laesst den Timer unberuehrt`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 30_000L)
+        val resting = controller.phase.value as SessionPhase.Resting
+
+        advance(20_000); press()
+        advance(1_000); press()
+
+        assertEquals(resting, controller.phase.value)
+        assertEquals(1, attemptDao.attempts.size)
+    }
+
+    @Test
+    fun `genau drei Sekunden zaehlen noch als Versuch`() = runTest {
+        controller.start()
+        advance(5_000); press()
+        advance(3_000); press()
+
+        assertTrue(controller.phase.value is SessionPhase.Grading)
+        assertEquals(1, attemptDao.attempts.size)
+    }
+
+    @Test
+    fun `die Zusammenfassung gruppiert die Versuche zu Bouldern`() = runTest {
+        controller.start()
+        advance(5_000)
+
+        suspend fun burn(grade: String, outcome: AttemptOutcome?) {
+            press()
+            advance(20_000)
+            press()
+            controller.previewGrade(Grades.parse(grade)!!)
+            advance(gradingMs)
+            press()
+            outcome?.let {
+                controller.logOutcome(
+                    (controller.phase.value as SessionPhase.Resting).lastAttemptId, it,
+                )
+            }
+            advance(90_000)
+        }
+
+        burn("7A", null)
+        burn("7A", AttemptOutcome.TOP)
+        burn("6B", AttemptOutcome.FLASH)
+        burn("7A", null)
+
+        val finished = controller.finish()!!
+        assertEquals(3, finished.runs.size)
+        assertEquals(2, finished.runs[0].attempts)
+        assertTrue(finished.runs[0].isSent)
+        assertTrue(finished.runs[1].isFlash)
+        assertFalse(finished.runs[2].isSent)
+        assertEquals(4, finished.summary.attemptCount)
+        assertEquals(2, finished.summary.sendCount)
+    }
+
     @Test
     fun `eine neue Session verwirft eine noch offene`() = runTest {
         val first = controller.start()

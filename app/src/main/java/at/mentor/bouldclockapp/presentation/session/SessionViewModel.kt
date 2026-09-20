@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
+import at.mentor.bouldclockapp.core.model.RestDurations
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
+import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.session.SessionController
 import at.mentor.bouldclockapp.data.settings.AppSettings
 import kotlinx.coroutines.delay
@@ -32,7 +34,14 @@ import kotlinx.coroutines.launch
 sealed interface SessionUiState {
     data object Restoring : SessionUiState
     data object NoSession : SessionUiState
+
+    /** Pausenlaenge waehlen, bevor eine benutzerdefinierte Session startet. */
+    data class ChoosingRest(val restTargetMs: Long) : SessionUiState
+
     data class Running(val phase: SessionPhase) : SessionUiState
+
+    /** Zusammenfassung nach dem Beenden. */
+    data class Summary(val finished: FinishedSession) : SessionUiState
 }
 
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,34 +57,38 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         preferredGradeSystem = { settings.gradeSystem.first() },
     )
 
+    private val restored = MutableStateFlow(false)
+    private val choosingRest = MutableStateFlow<Long?>(null)
+    private val finished = MutableStateFlow<FinishedSession?>(null)
+
     /** Anzeigeskala der Grade. Einstellbar, bevor eine Session laeuft. */
     val gradeSystem: StateFlow<GradeSystem> = settings.gradeSystem
         .stateIn(viewModelScope, SharingStarted.Eagerly, GradeSystem.FONT)
 
-    private val restored = MutableStateFlow(false)
-
-    val uiState: StateFlow<SessionUiState> =
-        combine(restored, controller.session, controller.phase) { restored, session, phase ->
-            when {
-                !restored -> SessionUiState.Restoring
-                session == null -> SessionUiState.NoSession
-                else -> SessionUiState.Running(phase)
-            }
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, SessionUiState.Restoring)
+    val uiState: StateFlow<SessionUiState> = combine(
+        restored,
+        controller.session,
+        controller.phase,
+        choosingRest,
+        finished,
+    ) { restored, session, phase, pendingRest, finishedSession ->
+        when {
+            !restored -> SessionUiState.Restoring
+            finishedSession != null -> SessionUiState.Summary(finishedSession)
+            session != null -> SessionUiState.Running(phase)
+            pendingRest != null -> SessionUiState.ChoosingRest(pendingRest)
+            else -> SessionUiState.NoSession
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, SessionUiState.Restoring)
 
     private val phase: StateFlow<SessionPhase> = controller.phase
 
     init {
-        // Nach einem Absturz dort weitermachen, wo es aufgehoert hat - ohne zu fragen,
-        // ob eine Session laeuft. Das steht in der Datenbank.
         viewModelScope.launch {
             controller.resumeUnfinished()
             restored.value = true
         }
 
-        // Traegt HRR60 nach, sobald das Messfenster durch ist. collectLatest bricht
-        // das Warten ab, wenn vorher ein neuer Versuch startet - dann uebernimmt
-        // der Controller die Berechnung selbst, mit der echten Pausenlaenge.
         viewModelScope.launch {
             controller.phase.collectLatest { phase ->
                 val pending = phase.pendingHrr60() ?: return@collectLatest
@@ -98,8 +111,32 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun startSession(type: SessionType = SessionType.FREE) {
-        viewModelScope.launch { controller.start(type = type) }
+    /**
+     * Sessionart gewaehlt. [SessionType.CUSTOM] startet nicht sofort, sondern
+     * fragt zuerst die Pausenlaenge ab.
+     */
+    fun chooseSession(type: SessionType) {
+        if (type == SessionType.CUSTOM) {
+            viewModelScope.launch {
+                choosingRest.value = settings.restTargetMs(type).first()
+            }
+        } else {
+            viewModelScope.launch { controller.start(type = type) }
+        }
+    }
+
+    fun setCustomRest(restTargetMs: Long) {
+        choosingRest.value = RestDurations.clamp(restTargetMs)
+    }
+
+    fun confirmCustomSession() {
+        val restTargetMs = choosingRest.value ?: return
+        viewModelScope.launch {
+            // Merken, damit die naechste eigene Session dort wieder anfaengt.
+            settings.setRestTargetMs(SessionType.CUSTOM, restTargetMs)
+            controller.start(type = SessionType.CUSTOM, restTargetMs = restTargetMs)
+            choosingRest.value = null
+        }
     }
 
     /** Gradauswahl mitfuehren - geschrieben wird erst beim Bestaetigen. */
@@ -118,7 +155,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun finishSession() {
-        viewModelScope.launch { controller.finish() }
+        viewModelScope.launch { finished.value = controller.finish() }
+    }
+
+    fun dismissSummary() {
+        finished.value = null
     }
 
     private companion object {
