@@ -14,6 +14,8 @@ import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
 import at.mentor.bouldclockapp.data.sensor.SensorFilePressureSource
+import at.mentor.bouldclockapp.data.sync.SessionSyncRepository
+import at.mentor.bouldclockapp.data.sync.SessionSyncSender
 import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
@@ -112,6 +114,8 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         db.sessionSummaryDao().observeRecent(RECENT_SESSIONS)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    private val syncSender = SessionSyncSender(application, SessionSyncRepository(db))
+
     private val restored = MutableStateFlow(false)
     private val choosingRest = MutableStateFlow<Long?>(null)
     private val finished = MutableStateFlow<FinishedSession?>(null)
@@ -144,6 +148,10 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // Aufzeichnung wieder anspringen, sonst fehlt der Rest des Abends.
             controller.resumeUnfinished()?.let { startRecording(it.id) }
             restored.value = true
+
+            // Beim Start nachholen, was beim letzten Mal nicht durchging - etwa
+            // weil das Handy in der Halle nicht in Reichweite war.
+            syncSender.syncPending()
         }
 
         viewModelScope.launch {
@@ -243,6 +251,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             finished.value = controller.finish()
             SessionRecordingService.stop(getApplication())
+            syncSender.syncPending()
         }
     }
 

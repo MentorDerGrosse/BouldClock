@@ -24,7 +24,7 @@ import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
-import at.mentor.bouldclockapp.presentation.components.attemptLabel
+import at.mentor.bouldclockapp.core.text.attemptLabel
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
 import java.text.SimpleDateFormat
 import java.util.Date

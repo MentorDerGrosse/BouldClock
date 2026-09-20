@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "BouldClockApp"
 include(":app")
+include(":shared")
+include(":mobile")
  

@@ -26,7 +26,7 @@ import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
-import at.mentor.bouldclockapp.presentation.components.attemptLabel
+import at.mentor.bouldclockapp.core.text.attemptLabel
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
 import java.util.Locale
 import kotlin.math.roundToInt

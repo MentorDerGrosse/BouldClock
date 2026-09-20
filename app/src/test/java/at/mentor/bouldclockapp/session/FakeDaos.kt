@@ -1,6 +1,8 @@
 package at.mentor.bouldclockapp.session
 
 import at.mentor.bouldclockapp.core.model.SessionMetric
+import at.mentor.bouldclockapp.core.model.SessionState
+import at.mentor.bouldclockapp.core.model.SyncState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.data.db.dao.AttemptAggregate
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
@@ -52,6 +54,13 @@ class FakeSessionDao : SessionDao {
         return victims.size
     }
 
+    override suspend fun pendingSync(): List<SessionEntity> =
+        sessions.values.filter {
+            it.state == SessionState.FINISHED &&
+                it.meta.deletedAt == null &&
+                it.meta.syncState == SyncState.PENDING
+        }.sortedBy { it.startedAt }
+
     override fun observeRecent(limit: Int): Flow<List<SessionEntity>> = flowOf(emptyList())
 
     override suspend fun previousComparable(
@@ -102,6 +111,9 @@ class FakeAttemptDao : AttemptDao {
             .filter { it.endedAt != null && it.ordinal < pivot.ordinal }
             .maxByOrNull { it.ordinal }
     }
+
+    override suspend fun allBySession(sessionId: String): List<AttemptEntity> =
+        of(sessionId).sortedBy { it.ordinal }
 
     override suspend fun finishedBySession(sessionId: String): List<AttemptEntity> =
         of(sessionId).filter { it.endedAt != null }.sortedBy { it.ordinal }
@@ -161,6 +173,9 @@ class FakeHrSampleDao(private val samples: MutableList<HrSampleEntity> = mutable
     override suspend fun maxBetween(sessionId: String, from: Long, to: Long, minAccuracy: Int): Int? =
         between(sessionId, from, to).filter { it.accuracy >= minAccuracy }.maxOfOrNull { it.bpm }
 
+    override suspend fun bySession(sessionId: String): List<HrSampleEntity> =
+        samples.filter { it.sessionId == sessionId }.sortedBy { it.timestampMs }
+
     override suspend fun deleteForSession(sessionId: String) {
         samples.removeAll { it.sessionId == sessionId }
     }
@@ -183,6 +198,9 @@ class FakeMetricSampleDao : MetricSampleDao {
     override suspend fun latestAt(sessionId: String, metric: SessionMetric, at: Long): Double? =
         samples.filter { it.sessionId == sessionId && it.metric == metric && it.timestampMs <= at }
             .maxByOrNull { it.timestampMs }?.value
+
+    override suspend fun bySession(sessionId: String): List<MetricSampleEntity> =
+        samples.filter { it.sessionId == sessionId }.sortedBy { it.timestampMs }
 
     override suspend fun deleteForSession(sessionId: String) {
         samples.removeAll { it.sessionId == sessionId }

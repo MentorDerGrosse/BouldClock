@@ -1,0 +1,9 @@
+at.mentor.bouldclockapp.shared-pngs-0 /home/thomas/BouldClock/shared/build/generated/res/pngs/debug
+at.mentor.bouldclockapp.shared-updated_navigation_xml-1 /home/thomas/BouldClock/shared/build/generated/updated_navigation_xml/debug
+at.mentor.bouldclockapp.shared-mergeDebugResources-2 /home/thomas/BouldClock/shared/build/intermediates/incremental/debug/mergeDebugResources/merged.dir
+at.mentor.bouldclockapp.shared-mergeDebugResources-3 /home/thomas/BouldClock/shared/build/intermediates/incremental/debug/mergeDebugResources/stripped.dir
+at.mentor.bouldclockapp.shared-debug-4 /home/thomas/BouldClock/shared/build/intermediates/merged_res/debug/mergeDebugResources
+at.mentor.bouldclockapp.shared-debug-5 /home/thomas/BouldClock/shared/build/intermediates/packaged_res/debug/packageDebugResources
+at.mentor.bouldclockapp.shared-debug-6 /home/thomas/BouldClock/shared/src/debug/res
+at.mentor.bouldclockapp.shared-main-7 /home/thomas/BouldClock/shared/src/main/res
+gradleHome-0 /home/thomas/.gradle
