@@ -1,9 +1,14 @@
 package at.mentor.bouldclockapp.presentation
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
@@ -65,6 +72,8 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                 triggerBus.events.collect { viewModel.trigger() }
             }
 
+            RequestRecordingPermissions()
+
             val gradeSystem by viewModel.gradeSystem.collectAsStateWithLifecycle()
 
             when (val state = uiState) {
@@ -115,6 +124,45 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
  * Scrollbare Liste statt fester Spalte: Kopfzeile plus vier Typen passen auf
  * einem 40-mm-Zifferblatt nicht gleichzeitig auf den Schirm.
  */
+/**
+ * Fragt die Berechtigungen fuer Puls und Aufzeichnung ab.
+ *
+ * Wird abgelehnt, laeuft die App weiter - nur eben ohne Puls. Eine Session zu
+ * blockieren, weil jemand den Sensor nicht freigeben will, waere die schlechtere
+ * Antwort.
+ */
+@Composable
+private fun RequestRecordingPermissions() {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { /* Ergebnis egal - ohne Puls zeichnet die App trotzdem auf. */ }
+
+    LaunchedEffect(Unit) {
+        val required = buildList {
+            add(Manifest.permission.BODY_SENSORS)
+            add(Manifest.permission.ACTIVITY_RECOGNITION)
+            // Health-Connect-Berechtigungen: ab Android 16 verlangt Health
+            // Services diese, BODY_SENSORS allein genuegt nicht mehr. Als
+            // Zeichenketten, weil die Konstanten erst in neueren SDKs stehen.
+            addAll(HEALTH_PERMISSIONS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (required.isNotEmpty()) launcher.launch(required.toTypedArray())
+    }
+}
+
+private val HEALTH_PERMISSIONS = listOf(
+    "android.permission.health.READ_HEART_RATE",
+    "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+    "android.permission.health.READ_TOTAL_CALORIES_BURNED",
+    "android.permission.health.READ_ELEVATION_GAINED",
+)
+
 @Composable
 private fun StartSessionScreen(
     gradeSystem: GradeSystem,

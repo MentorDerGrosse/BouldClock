@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
+import at.mentor.bouldclockapp.data.db.dao.CalorieSampleDao
 import at.mentor.bouldclockapp.data.db.dao.GymDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
 import at.mentor.bouldclockapp.data.db.dao.ProblemDao
@@ -14,6 +15,7 @@ import at.mentor.bouldclockapp.data.db.dao.SensorChunkDao
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
+import at.mentor.bouldclockapp.data.db.entity.CalorieSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.GymEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
@@ -28,6 +30,7 @@ import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
         SessionEntity::class,
         AttemptEntity::class,
         HrSampleEntity::class,
+        CalorieSampleEntity::class,
         SessionSummaryEntity::class,
         SensorChunkEntity::class,
     ],
@@ -35,7 +38,7 @@ import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
     // ergaenzen. Bleibt die Nummer stehen, weigert sich Room beim ersten
     // Datenbankzugriff, eine vorhandene Datei zu oeffnen - die App stirbt dann
     // beim Start, ohne dass ein Test das vorher merkt.
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class BouldClockDatabase : RoomDatabase() {
@@ -45,6 +48,7 @@ abstract class BouldClockDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun attemptDao(): AttemptDao
     abstract fun hrSampleDao(): HrSampleDao
+    abstract fun calorieSampleDao(): CalorieSampleDao
     abstract fun sessionSummaryDao(): SessionSummaryDao
     abstract fun sensorChunkDao(): SensorChunkDao
 
@@ -75,12 +79,31 @@ abstract class BouldClockDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Kalorienverlauf. SQL woertlich aus dem exportierten Schema 4.json -
+         * eine von Hand getippte Tabelle weicht sonst irgendwo ab, und Room
+         * merkt das erst beim Oeffnen auf dem Geraet.
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `calorie_sample` (" +
+                        "`sessionId` TEXT NOT NULL, " +
+                        "`timestampMs` INTEGER NOT NULL, " +
+                        "`kcalTotal` REAL NOT NULL, " +
+                        "PRIMARY KEY(`sessionId`, `timestampMs`), " +
+                        "FOREIGN KEY(`sessionId`) REFERENCES `session`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )",
+                )
+            }
+        }
+
         private fun build(context: Context): BouldClockDatabase =
             Room.databaseBuilder(context, BouldClockDatabase::class.java, NAME)
                 // Rooms Default, hier bewusst explizit: die Absturzsicherheit der
                 // laufenden Session haengt genau daran.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 // Notnagel fuer die Entwicklung: eine vergessene Migration soll
                 // die Datenbank leeren, nicht die App unstartbar machen. Vor der
                 // ersten echten Veroeffentlichung muss das hier raus, sonst

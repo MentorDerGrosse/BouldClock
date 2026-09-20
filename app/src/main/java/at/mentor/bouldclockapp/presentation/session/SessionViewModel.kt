@@ -12,6 +12,7 @@ import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.session.SessionController
+import at.mentor.bouldclockapp.data.session.SessionRecordingService
 import at.mentor.bouldclockapp.data.settings.AppSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,7 +86,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            controller.resumeUnfinished()
+            // Nach einem Absturz laeuft die Session weiter - dann muss auch die
+            // Aufzeichnung wieder anspringen, sonst fehlt der Rest des Abends.
+            controller.resumeUnfinished()?.let { startRecording(it.id) }
             restored.value = true
         }
 
@@ -121,7 +124,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 choosingRest.value = settings.restTargetMs(type).first()
             }
         } else {
-            viewModelScope.launch { controller.start(type = type) }
+            viewModelScope.launch { startRecording(controller.start(type = type).id) }
         }
     }
 
@@ -134,7 +137,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             // Merken, damit die naechste eigene Session dort wieder anfaengt.
             settings.setRestTargetMs(SessionType.CUSTOM, restTargetMs)
-            controller.start(type = SessionType.CUSTOM, restTargetMs = restTargetMs)
+            startRecording(controller.start(type = SessionType.CUSTOM, restTargetMs = restTargetMs).id)
             choosingRest.value = null
         }
     }
@@ -163,7 +166,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun finishSession() {
-        viewModelScope.launch { finished.value = controller.finish() }
+        viewModelScope.launch {
+            finished.value = controller.finish()
+            SessionRecordingService.stop(getApplication())
+        }
+    }
+
+    private fun startRecording(sessionId: String) {
+        SessionRecordingService.start(getApplication(), sessionId)
     }
 
     fun dismissSummary() {
