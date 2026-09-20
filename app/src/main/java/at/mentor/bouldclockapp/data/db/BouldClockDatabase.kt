@@ -41,7 +41,7 @@ import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
     // ergaenzen. Bleibt die Nummer stehen, weigert sich Room beim ersten
     // Datenbankzugriff, eine vorhandene Datei zu oeffnen - die App stirbt dann
     // beim Start, ohne dass ein Test das vorher merkt.
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class BouldClockDatabase : RoomDatabase() {
@@ -147,13 +147,25 @@ abstract class BouldClockDatabase : RoomDatabase() {
             }
         }
 
+        /** Kletterhoehe je Versuch, Kalorien und Hoehe in der Zusammenfassung. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE attempt ADD COLUMN climbHeightMeters REAL")
+                db.execSQL("ALTER TABLE session_summary ADD COLUMN caloriesTotal REAL")
+                db.execSQL("ALTER TABLE session_summary ADD COLUMN caloriesOnWall REAL")
+                db.execSQL("ALTER TABLE session_summary ADD COLUMN climbHeightMeters REAL")
+                db.execSQL("ALTER TABLE session_summary ADD COLUMN maxClimbHeightMeters REAL")
+            }
+        }
+
         private fun build(context: Context): BouldClockDatabase =
             Room.databaseBuilder(context, BouldClockDatabase::class.java, NAME)
                 // Rooms Default, hier bewusst explizit: die Absturzsicherheit der
                 // laufenden Session haengt genau daran.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(
-                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                    MIGRATION_5_6, MIGRATION_6_7,
                 )
                 // Notnagel fuer die Entwicklung: eine vergessene Migration soll
                 // die Datenbank leeren, nicht die App unstartbar machen. Vor der

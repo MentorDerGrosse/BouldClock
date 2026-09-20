@@ -13,6 +13,7 @@ import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
+import at.mentor.bouldclockapp.data.sensor.SensorFilePressureSource
 import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.session.SessionController
@@ -71,7 +72,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         sessionDao = db.sessionDao(),
         attemptDao = db.attemptDao(),
         hrSampleDao = db.hrSampleDao(),
+        metricSampleDao = db.metricSampleDao(),
         summaryDao = db.sessionSummaryDao(),
+        pressureTraceSource = SensorFilePressureSource(application, db.sensorChunkDao()),
         // Bei jeder Gradabfrage frisch gelesen - eine Umstellung greift sofort.
         preferredGradeSystem = { settings.gradeSystem.first() },
     )

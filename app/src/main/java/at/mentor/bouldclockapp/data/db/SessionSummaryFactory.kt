@@ -17,6 +17,8 @@ fun buildSessionSummary(
     aggregate: AttemptAggregate,
     hrAvg: Int?,
     hrMax: Int?,
+    caloriesTotal: Double?,
+    caloriesOnWall: Double?,
     now: Long,
 ): SessionSummaryEntity {
     val endedAt = session.endedAt ?: now
@@ -42,6 +44,10 @@ fun buildSessionSummary(
         hrAvg = hrAvg,
         hrMax = hrMax,
         hrr60Avg = aggregate.hrr60Avg?.roundToInt(),
+        caloriesTotal = caloriesTotal,
+        caloriesOnWall = caloriesOnWall,
+        climbHeightMeters = aggregate.climbHeightMeters,
+        maxClimbHeightMeters = aggregate.maxClimbHeightMeters,
         rpe = session.rpe,
         computedAt = now,
     )

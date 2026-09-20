@@ -134,7 +134,9 @@ interface AttemptDao {
             COALESCE(SUM(CASE WHEN outcome = 'FLASH' THEN 1 ELSE 0 END), 0)         AS flashCount,
             COALESCE(SUM(endedAt - startedAt), 0)                         AS workMs,
             MAX(CASE WHEN outcome IN ('FLASH','TOP') THEN gradeValue END) AS hardestSendValue,
-            AVG(hrr60)                                                    AS hrr60Avg
+            AVG(hrr60)                                                    AS hrr60Avg,
+            SUM(climbHeightMeters)                                        AS climbHeightMeters,
+            MAX(climbHeightMeters)                                        AS maxClimbHeightMeters
         FROM attempt
         WHERE sessionId = :sessionId
           AND deletedAt IS NULL
@@ -152,4 +154,6 @@ data class AttemptAggregate(
     val workMs: Long,
     val hardestSendValue: Int?,
     val hrr60Avg: Double?,
+    val climbHeightMeters: Double?,
+    val maxClimbHeightMeters: Double?,
 )
