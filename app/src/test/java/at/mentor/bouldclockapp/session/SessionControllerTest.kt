@@ -144,6 +144,32 @@ class SessionControllerTest {
     }
 
     /**
+     * Die Skala kommt aus den Einstellungen, die Stufe aus der Vorgeschichte.
+     * Eine Umstellung darf frueher eingetragene Grade nicht umdeuten - dieselbe
+     * Stufe, nur anders geschrieben.
+     */
+    @Test
+    fun `die Gradabfrage nutzt die eingestellte Skala`() = runTest {
+        val vScale = SessionController(
+            sessionDao, attemptDao, hrDao, summaryDao,
+            preferredGradeSystem = { GradeSystem.V_SCALE },
+        ) { now }
+        vScale.start()
+        vScale.trigger()
+        advance(30_000)
+        vScale.trigger()
+        vScale.previewGrade(Grades.parse("7A")!!)
+        advance(gradingMs)
+        vScale.trigger()
+
+        val attempt = attemptDao.attempts.values.single()
+        assertEquals(Grades.parse("V6"), attempt.gradeValue)
+        assertEquals(GradeSystem.V_SCALE, attempt.gradeSystem)
+        // Dieselbe Stufe, in Font geschrieben.
+        assertEquals("7A", Grades.label(attempt.gradeValue!!, GradeSystem.FONT))
+    }
+
+    /**
      * Der Kern der Anforderung: der Pausen-Timer ist ein Signal, kein Uebergang.
      */
     @Test

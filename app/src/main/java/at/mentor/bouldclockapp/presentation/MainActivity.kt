@@ -17,12 +17,14 @@ import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
+import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.presentation.session.HardwareTriggerBus
 import at.mentor.bouldclockapp.presentation.session.SessionScreen
@@ -66,8 +68,14 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                 // schneller Tap eine zweite Session neben der offenen an.
                 SessionUiState.Restoring -> Box(Modifier.fillMaxSize())
 
-                SessionUiState.NoSession ->
-                    StartSessionScreen(onStart = viewModel::startSession)
+                SessionUiState.NoSession -> {
+                    val gradeSystem by viewModel.gradeSystem.collectAsStateWithLifecycle()
+                    StartSessionScreen(
+                        gradeSystem = gradeSystem,
+                        onToggleScale = viewModel::toggleGradeSystem,
+                        onStart = viewModel::startSession,
+                    )
+                }
 
                 is SessionUiState.Running -> ScreenScaffold {
                     SessionScreen(
@@ -90,7 +98,11 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
  * einem 40-mm-Zifferblatt nicht gleichzeitig auf den Schirm.
  */
 @Composable
-private fun StartSessionScreen(onStart: (SessionType) -> Unit) {
+private fun StartSessionScreen(
+    gradeSystem: GradeSystem,
+    onToggleScale: () -> Unit,
+    onStart: (SessionType) -> Unit,
+) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
@@ -115,6 +127,21 @@ private fun StartSessionScreen(onStart: (SessionType) -> Unit) {
                         Text(type.displayName)
                     }
                 }
+            }
+
+            // Vor der Session, nicht waehrend ihr: die Skala ist eine
+            // Anzeigevorliebe, die man einmal setzt. Gedaempft, damit sie nicht
+            // wie eine fuenfte Sessionart aussieht.
+            item {
+                Button(
+                    onClick = onToggleScale,
+                    modifier = Modifier.fillMaxWidth()
+                        .transformedHeight(this, transformationSpec),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    transformation = SurfaceTransformation(transformationSpec),
+                    secondaryLabel = { Text(gradeSystem.displayName) },
+                    label = { Text("Skala") },
+                )
             }
         }
     }

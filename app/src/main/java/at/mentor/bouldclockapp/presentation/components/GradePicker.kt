@@ -1,22 +1,15 @@
 package at.mentor.bouldclockapp.presentation.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Picker
 import androidx.wear.compose.material3.Text
@@ -88,50 +81,6 @@ fun GradePicker(
     }
 }
 
-/**
- * Schaltet zwischen den Skalen mit fester Leiter um.
- *
- * Ein Tap statt eines Menues - es sind genau zwei. Der gespeicherte Wert
- * aendert sich dabei nicht, nur seine Beschriftung.
- */
-@Composable
-fun ScaleToggle(
-    system: GradeSystem,
-    onSystemChange: (GradeSystem) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val options = remember { GradeSystem.entries.filter { it.hasFixedLadder } }
-    CompactButton(
-        onClick = {
-            val next = options[(options.indexOf(system) + 1).mod(options.size)]
-            onSystemChange(next)
-        },
-        modifier = modifier,
-        label = {
-            Text(text = system.displayName, style = MaterialTheme.typography.labelSmall)
-        },
-    )
-}
-
-/** Gradauswahl mit Skalenumschalter darueber. */
-@Composable
-fun GradePickerWithScale(
-    system: GradeSystem,
-    value: Int,
-    onValueChange: (Int) -> Unit,
-    onSystemChange: (GradeSystem) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        ScaleToggle(system = system, onSystemChange = onSystemChange)
-        GradePicker(system = system, value = value, onValueChange = onValueChange)
-    }
-}
-
 /** Stufe, die [target] am naechsten kommt - der exakte Wert kann in dieser Skala fehlen. */
 private fun nearestIndex(values: List<Int>, target: Int): Int =
     values.indices.minByOrNull { abs(values[it] - target) } ?: 0
@@ -140,13 +89,11 @@ private fun nearestIndex(values: List<Int>, target: Int): Int =
 @Composable
 private fun GradePickerPreview() {
     BouldClockAppTheme {
-        var system by remember { mutableStateOf(GradeSystem.FONT) }
         var grade by remember { mutableIntStateOf(Grades.parse("6C") ?: 0) }
-        GradePickerWithScale(
-            system = system,
+        GradePicker(
+            system = GradeSystem.FONT,
             value = grade,
             onValueChange = { grade = it },
-            onSystemChange = { system = it },
         )
     }
 }

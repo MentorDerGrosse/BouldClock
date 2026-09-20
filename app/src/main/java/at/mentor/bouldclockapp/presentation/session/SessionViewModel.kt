@@ -5,16 +5,19 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
+import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.session.SessionPhase
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.session.SessionController
+import at.mentor.bouldclockapp.data.settings.AppSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -35,12 +38,19 @@ sealed interface SessionUiState {
 class SessionViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = BouldClockDatabase.get(application)
+    private val settings = AppSettings(application)
     private val controller = SessionController(
         sessionDao = db.sessionDao(),
         attemptDao = db.attemptDao(),
         hrSampleDao = db.hrSampleDao(),
         summaryDao = db.sessionSummaryDao(),
+        // Bei jeder Gradabfrage frisch gelesen - eine Umstellung greift sofort.
+        preferredGradeSystem = { settings.gradeSystem.first() },
     )
+
+    /** Anzeigeskala der Grade. Einstellbar, bevor eine Session laeuft. */
+    val gradeSystem: StateFlow<GradeSystem> = settings.gradeSystem
+        .stateIn(viewModelScope, SharingStarted.Eagerly, GradeSystem.FONT)
 
     private val restored = MutableStateFlow(false)
 
@@ -76,6 +86,15 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 if (wait > 0) delay(wait)
                 controller.settleHrr60(pending.attemptId)
             }
+        }
+    }
+
+    /** Schaltet durch die Skalen mit fester Leiter - derzeit Font und V-Scale. */
+    fun toggleGradeSystem() {
+        viewModelScope.launch {
+            val options = GradeSystem.entries.filter { it.hasFixedLadder }
+            val next = options[(options.indexOf(gradeSystem.value) + 1).mod(options.size)]
+            settings.setGradeSystem(next)
         }
     }
 

@@ -3,7 +3,6 @@ package at.mentor.bouldclockapp.data.db.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
-import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -59,15 +58,19 @@ interface AttemptDao {
      * Vorschlagswert der Gradabfrage. Aus der Datenbank statt aus dem Speicher,
      * damit er einen App-Neustart ueberlebt - wer gestern 6C probiert hat,
      * faengt heute selten bei 3 an.
+     *
+     * Nur die Stufe, nicht die Skala: die Stufe ist eine Schwierigkeit und gilt
+     * skalenunabhaengig, die Skala ist reine Anzeigevorliebe und steht in den
+     * Einstellungen.
      */
     @Query(
         """
-        SELECT gradeValue AS gradeValue, gradeSystem AS gradeSystem FROM attempt
+        SELECT gradeValue FROM attempt
         WHERE gradeValue IS NOT NULL AND deletedAt IS NULL
         ORDER BY startedAt DESC LIMIT 1
         """,
     )
-    suspend fun lastGrade(): LastGrade?
+    suspend fun lastGradeValue(): Int?
 
     @Query("UPDATE attempt SET deletedAt = :now, updatedAt = :now, syncState = 'PENDING' WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
@@ -99,12 +102,6 @@ interface AttemptDao {
     )
     suspend fun aggregate(sessionId: String): AttemptAggregate
 }
-
-/** Projektion von [AttemptDao.lastGrade]. */
-data class LastGrade(
-    val gradeValue: Int,
-    val gradeSystem: GradeSystem?,
-)
 
 /** Projektion von [AttemptDao.aggregate]. */
 data class AttemptAggregate(

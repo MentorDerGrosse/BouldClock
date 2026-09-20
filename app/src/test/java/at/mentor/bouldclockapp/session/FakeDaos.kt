@@ -84,11 +84,11 @@ class FakeAttemptDao : AttemptDao {
 
     override fun observeByProblem(problemId: String): Flow<List<AttemptEntity>> = flowOf(emptyList())
 
-    override suspend fun lastGrade(): at.mentor.bouldclockapp.data.db.dao.LastGrade? =
+    override suspend fun lastGradeValue(): Int? =
         attempts.values
             .filter { it.gradeValue != null && it.meta.deletedAt == null }
             .maxByOrNull { it.startedAt }
-            ?.let { at.mentor.bouldclockapp.data.db.dao.LastGrade(it.gradeValue!!, it.gradeSystem) }
+            ?.gradeValue
 
     override suspend fun softDelete(id: String, now: Long) {
         attempts[id]?.let { attempts[id] = it.copy(meta = it.meta.deleted(now)) }

@@ -43,6 +43,12 @@ class SessionController(
     private val attemptDao: AttemptDao,
     private val hrSampleDao: HrSampleDao,
     private val summaryDao: SessionSummaryDao,
+    /**
+     * Bevorzugte Anzeigeskala. Wird bei jeder Gradabfrage frisch gelesen, damit
+     * eine Umstellung sofort greift. Steht bewusst vor [clock], damit der
+     * abschliessende Lambda-Parameter die Uhr bleibt.
+     */
+    private val preferredGradeSystem: suspend () -> GradeSystem = { GradeSystem.FONT },
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -178,12 +184,13 @@ class SessionController(
         // Weiter zur Gradabfrage, nicht direkt in die Pause: hier steht man noch
         // unter dem Boulder. Das Ergebnis wird spaeter abgefragt - dafuer ist die
         // ganze Pause Zeit.
-        val suggestion = attemptDao.lastGrade()
+        // Stufe aus der Vorgeschichte, Skala aus den Einstellungen: die Stufe ist
+        // eine Schwierigkeit, die Skala nur ihre Schreibweise.
         _phase.value = SessionPhase.Grading(
             attemptId = phase.attemptId,
             endedAt = now,
-            gradeValue = suggestion?.gradeValue ?: Grades.DEFAULT_VALUE,
-            gradeSystem = suggestion?.gradeSystem ?: GradeSystem.FONT,
+            gradeValue = attemptDao.lastGradeValue() ?: Grades.DEFAULT_VALUE,
+            gradeSystem = preferredGradeSystem(),
         )
     }
 
