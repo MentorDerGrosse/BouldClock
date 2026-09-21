@@ -120,6 +120,74 @@ public class SensorChunkDao_Impl(
     }
   }
 
+  public override suspend fun sessionsWithPendingFiles(): List<String> {
+    val _sql: String = "SELECT DISTINCT sessionId FROM sensor_chunk WHERE syncState = 'PENDING'"
+    return performSuspending(__db, true, false) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _result: MutableList<String> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: String
+          _item = _stmt.getText(0)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
+  public override suspend fun byRelativePath(relativePath: String): SensorChunkEntity? {
+    val _sql: String = "SELECT * FROM sensor_chunk WHERE relativePath = ? LIMIT 1"
+    return performSuspending(__db, true, false) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        _stmt.bindText(_argIndex, relativePath)
+        val _columnIndexOfId: Int = getColumnIndexOrThrow(_stmt, "id")
+        val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
+        val _columnIndexOfSensor: Int = getColumnIndexOrThrow(_stmt, "sensor")
+        val _columnIndexOfRelativePath: Int = getColumnIndexOrThrow(_stmt, "relativePath")
+        val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
+        val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
+        val _columnIndexOfSampleRateHz: Int = getColumnIndexOrThrow(_stmt, "sampleRateHz")
+        val _columnIndexOfSampleCount: Int = getColumnIndexOrThrow(_stmt, "sampleCount")
+        val _columnIndexOfSizeBytes: Int = getColumnIndexOrThrow(_stmt, "sizeBytes")
+        val _columnIndexOfSyncState: Int = getColumnIndexOrThrow(_stmt, "syncState")
+        val _result: SensorChunkEntity?
+        if (_stmt.step()) {
+          val _tmpId: String
+          _tmpId = _stmt.getText(_columnIndexOfId)
+          val _tmpSessionId: String
+          _tmpSessionId = _stmt.getText(_columnIndexOfSessionId)
+          val _tmpSensor: SensorKind
+          _tmpSensor = __SensorKind_stringToEnum(_stmt.getText(_columnIndexOfSensor))
+          val _tmpRelativePath: String
+          _tmpRelativePath = _stmt.getText(_columnIndexOfRelativePath)
+          val _tmpStartedAt: Long
+          _tmpStartedAt = _stmt.getLong(_columnIndexOfStartedAt)
+          val _tmpEndedAt: Long
+          _tmpEndedAt = _stmt.getLong(_columnIndexOfEndedAt)
+          val _tmpSampleRateHz: Int
+          _tmpSampleRateHz = _stmt.getLong(_columnIndexOfSampleRateHz).toInt()
+          val _tmpSampleCount: Int
+          _tmpSampleCount = _stmt.getLong(_columnIndexOfSampleCount).toInt()
+          val _tmpSizeBytes: Long
+          _tmpSizeBytes = _stmt.getLong(_columnIndexOfSizeBytes)
+          val _tmpSyncState: SyncState
+          _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
+          _result = SensorChunkEntity(_tmpId,_tmpSessionId,_tmpSensor,_tmpRelativePath,_tmpStartedAt,_tmpEndedAt,_tmpSampleRateHz,_tmpSampleCount,_tmpSizeBytes,_tmpSyncState)
+        } else {
+          _result = null
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override suspend fun synced(limit: Int): List<SensorChunkEntity> {
     val _sql: String = "SELECT * FROM sensor_chunk WHERE syncState = 'SYNCED' ORDER BY startedAt LIMIT ?"
     return performSuspending(__db, true, false) { _connection ->

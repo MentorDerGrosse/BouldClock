@@ -42,7 +42,7 @@ data class SessionDetail(
 class MobileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = BouldClockDatabase.get(application)
-    private val repository = SessionSyncRepository(db)
+    private val repository = SessionSyncRepository(db, application.filesDir)
     private val sender = SessionSyncSender(application, repository)
 
     val summaries: StateFlow<List<SessionSummaryEntity>> =

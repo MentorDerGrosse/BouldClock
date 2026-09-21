@@ -2,6 +2,7 @@ package at.mentor.bouldclockapp.data.sync
 
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
+import at.mentor.bouldclockapp.core.model.SensorKind
 import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
@@ -10,6 +11,7 @@ import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
+import at.mentor.bouldclockapp.data.db.entity.SensorChunkEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -31,6 +33,16 @@ data class SessionPayload(
     val attempts: List<AttemptEntity>,
     val hrSamples: List<HrSampleEntity>,
     val metricSamples: List<MetricSampleEntity>,
+
+    /**
+     * Beschreibung der Sensordateien - nicht ihr Inhalt.
+     *
+     * Die Dateien selbst kommen ueber einen eigenen Kanal hinterher. Ihre
+     * Metadaten fahren hier mit, damit das Handy vorher weiss, was es erwartet,
+     * und eine Session auch dann vollstaendig aussieht, wenn die Uebertragung
+     * der Dateien noch laeuft.
+     */
+    val sensorChunks: List<SensorChunkEntity> = emptyList(),
 ) {
 
     fun toJson(): String = JSONObject().apply {
@@ -42,6 +54,7 @@ data class SessionPayload(
             KEY_METRICS,
             JSONArray(metricSamples.map { JSONArray(listOf(it.metric.name, it.timestampMs, it.value)) }),
         )
+        put(KEY_CHUNKS, JSONArray(sensorChunks.map { it.toJson() }))
     }.toString()
 
     companion object {
@@ -52,6 +65,7 @@ data class SessionPayload(
         private const val KEY_ATTEMPTS = "attempts"
         private const val KEY_HR = "hr"
         private const val KEY_METRICS = "metrics"
+        private const val KEY_CHUNKS = "chunks"
 
         /**
          * Liest ein Paket. Wirft nur, wenn nicht einmal die Session lesbar ist -
@@ -80,7 +94,11 @@ data class SessionPayload(
                 }.getOrNull()
             }
 
-            return SessionPayload(session, attempts, hrSamples, metricSamples)
+            val sensorChunks = root.optJSONArray(KEY_CHUNKS).objects().mapNotNull { obj ->
+                runCatching { obj.toSensorChunk(session.id) }.getOrNull()
+            }
+
+            return SessionPayload(session, attempts, hrSamples, metricSamples, sensorChunks)
         }
     }
 }
@@ -162,6 +180,31 @@ private fun JSONObject.toAttempt(sessionId: String) = AttemptEntity(
     hrr60 = optIntOrNull("hrr60"),
     restAfterMs = optLongOrNull("restAfterMs"),
     meta = readMeta(),
+)
+
+private fun SensorChunkEntity.toJson() = JSONObject().apply {
+    put("id", id)
+    put("sensor", sensor.name)
+    put("relativePath", relativePath)
+    put("startedAt", startedAt)
+    put("endedAt", endedAt)
+    put("sampleRateHz", sampleRateHz)
+    put("sampleCount", sampleCount)
+    put("sizeBytes", sizeBytes)
+}
+
+private fun JSONObject.toSensorChunk(sessionId: String) = SensorChunkEntity(
+    id = getString("id"),
+    sessionId = sessionId,
+    sensor = SensorKind.valueOf(getString("sensor")),
+    relativePath = getString("relativePath"),
+    startedAt = getLong("startedAt"),
+    endedAt = getLong("endedAt"),
+    sampleRateHz = optInt("sampleRateHz", 0),
+    sampleCount = optInt("sampleCount", 0),
+    sizeBytes = optLong("sizeBytes", 0L),
+    // Auf der Empfaengerseite heisst PENDING: Datei noch nicht da.
+    syncState = at.mentor.bouldclockapp.core.model.SyncState.PENDING,
 )
 
 private fun JSONObject.putMeta(meta: RecordMeta) {

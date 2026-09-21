@@ -2,6 +2,7 @@ package at.mentor.bouldclockapp.sync
 
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
+import at.mentor.bouldclockapp.core.model.SensorKind
 import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
@@ -10,6 +11,7 @@ import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
+import at.mentor.bouldclockapp.data.db.entity.SensorChunkEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import at.mentor.bouldclockapp.data.sync.SessionPayload
 import org.json.JSONObject
@@ -140,5 +142,86 @@ class SessionPayloadTest {
         )
         val bytesJeWert = viele.toJson().length / 1000
         assertTrue("Zu gross: $bytesJeWert Byte je Pulswert", bytesJeWert < 30)
+    }
+}
+
+class SyncProtocolPathTest {
+
+    @Test
+    fun `ein normaler Pfad wird uebernommen`() {
+        val path = at.mentor.bouldclockapp.data.sync.SyncProtocol
+            .filePath("sensors/abc-123/ACCELEROMETER.bcs")
+        assertEquals(
+            "sensors/abc-123/ACCELEROMETER.bcs",
+            at.mentor.bouldclockapp.data.sync.SyncProtocol.relativePathFrom(path),
+        )
+    }
+
+    /**
+     * Der Pfad kommt vom anderen Geraet. Eine Datei ausserhalb des
+     * App-Verzeichnisses zu schreiben waere das Letzte, was eine
+     * Synchronisierung tun sollte.
+     */
+    @Test
+    fun `Ausbruchsversuche werden abgewiesen`() {
+        val protocol = at.mentor.bouldclockapp.data.sync.SyncProtocol
+        assertNull(protocol.relativePathFrom("/bouldclock/file/../../etc/passwd"))
+        assertNull(protocol.relativePathFrom("/bouldclock/file//absolut"))
+        assertNull(protocol.relativePathFrom("/bouldclock/file/"))
+        assertNull(protocol.relativePathFrom("/ganz/woanders/datei"))
+        assertNull(protocol.relativePathFrom("/bouldclock/file/a//b"))
+    }
+
+    @Test
+    fun `gepackte Daten kommen unveraendert zurueck`() {
+        val protocol = at.mentor.bouldclockapp.data.sync.SyncProtocol
+        val text = """{"viele":"gleichfoermige","zahlen":[1,2,3,4,5]}"""
+        assertEquals(text, protocol.unpack(protocol.pack(text)))
+    }
+}
+
+/**
+ * Eine angekommene Datei muss sich aus ihrem Pfad einordnen lassen.
+ *
+ * Sonst liegt sie zwar auf der Platte, aber keine Zeile zeigt auf sie - und
+ * genau das ist passiert: 21 uebertragene Dateien, null Zeilen in der Tabelle.
+ */
+class ArrivedSensorFileTest {
+
+    @Test
+    fun `Pfad liefert Session und Sensor`() {
+        val path = "sensors/abc-123/GYROSCOPE.bcs"
+        val chunk = SensorChunkEntity.fromArrivedFile(path, sizeBytes = 4711L)
+
+        assertEquals("abc-123", chunk?.sessionId)
+        assertEquals(SensorKind.GYROSCOPE, chunk?.sensor)
+        assertEquals(path, chunk?.relativePath)
+        assertEquals(4711L, chunk?.sizeBytes)
+        // Die Datei ist da - was fehlt, sind nur die Metadaten.
+        assertEquals(SyncState.SYNCED, chunk?.syncState)
+        assertEquals(0, chunk?.sampleCount)
+    }
+
+    @Test
+    fun `Schreiben und Einordnen benutzen denselben Pfad`() {
+        assertEquals(
+            "sensors/s1/PRESSURE.bcs",
+            SensorChunkEntity.relativePath("s1", SensorKind.PRESSURE),
+        )
+        assertEquals(
+            SensorKind.PRESSURE,
+            SensorChunkEntity
+                .fromArrivedFile(SensorChunkEntity.relativePath("s1", SensorKind.PRESSURE), 1L)
+                ?.sensor,
+        )
+    }
+
+    @Test
+    fun `fremde Pfade werden nicht eingeordnet`() {
+        assertNull(SensorChunkEntity.fromArrivedFile("woanders/s1/GYROSCOPE.bcs", 1L))
+        assertNull(SensorChunkEntity.fromArrivedFile("sensors/s1/UNBEKANNT.bcs", 1L))
+        assertNull(SensorChunkEntity.fromArrivedFile("sensors//GYROSCOPE.bcs", 1L))
+        assertNull(SensorChunkEntity.fromArrivedFile("sensors/s1/tief/GYROSCOPE.bcs", 1L))
+        assertNull(SensorChunkEntity.fromArrivedFile("GYROSCOPE.bcs", 1L))
     }
 }

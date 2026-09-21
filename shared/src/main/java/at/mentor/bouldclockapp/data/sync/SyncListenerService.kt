@@ -4,12 +4,14 @@ import at.mentor.bouldclockapp.core.diagnostics.Diagnostics
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.Asset
+import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 import kotlinx.coroutines.runBlocking
+import java.io.File
 
 /**
  * Nimmt Sessions und Profil von der Gegenseite entgegen.
@@ -25,7 +27,10 @@ import kotlinx.coroutines.runBlocking
 class SyncListenerService : WearableListenerService() {
 
     override fun onDataChanged(events: DataEventBuffer) {
-        val repository = SessionSyncRepository(BouldClockDatabase.get(applicationContext))
+        val repository = SessionSyncRepository(
+            BouldClockDatabase.get(applicationContext),
+            applicationContext.filesDir,
+        )
 
         events.forEach { event ->
             if (event.type != DataEvent.TYPE_CHANGED) return@forEach
@@ -47,6 +52,40 @@ class SyncListenerService : WearableListenerService() {
             }.onFailure {
                 Diagnostics.log(applicationContext, TAG, "Paket von $path nicht lesbar", it)
             }
+        }
+    }
+
+    /**
+     * Nimmt eine Sensordatei entgegen.
+     *
+     * Der Pfad kommt vom anderen Geraet und wird geprueft, bevor irgendwo
+     * geschrieben wird - eine Datei ausserhalb des App-Verzeichnisses waere das
+     * Letzte, was eine Synchronisierung anrichten sollte.
+     */
+    override fun onChannelOpened(channel: ChannelClient.Channel) {
+        val relativePath = SyncProtocol.relativePathFrom(channel.path) ?: return
+        val client = Wearable.getChannelClient(applicationContext)
+        val repository = SessionSyncRepository(
+            BouldClockDatabase.get(applicationContext),
+            applicationContext.filesDir,
+        )
+
+        runCatching {
+            val target = File(applicationContext.filesDir, relativePath)
+            target.parentFile?.mkdirs()
+
+            Tasks.await(client.getInputStream(channel)).use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+
+            runBlocking { repository.markFileArrived(relativePath, target.length()) }
+            Diagnostics.log(
+                applicationContext,
+                TAG,
+                "$relativePath empfangen, ${target.length()} Byte",
+            )
+        }.onFailure {
+            Diagnostics.log(applicationContext, TAG, "$relativePath nicht empfangen", it)
         }
     }
 

@@ -23,6 +23,32 @@ object SyncProtocol {
 
     /** Das Profil - eine einzige Zeile, die in beide Richtungen wandert. */
     const val PROFILE_PATH: String = "/bouldclock/profile"
+
+    /**
+     * Sensordateien gehen ueber einen eigenen Kanal, nicht als Datenpunkt.
+     *
+     * Ein Datenpunkt samt Anhang ist fuer kleine, dauerhaft vorgehaltene Daten
+     * gedacht; eine Session bringt mehrere Megabyte Rohsensorik mit. Der Kanal
+     * ueberträgt am Stueck und braucht dafuer beide Geraete gleichzeitig.
+     */
+    const val FILE_PATH_PREFIX: String = "/bouldclock/file/"
+
+    fun filePath(relativePath: String): String = FILE_PATH_PREFIX + relativePath
+
+    /**
+     * Zielpfad aus einem Kanalpfad - oder `null`, wenn er nicht taugt.
+     *
+     * Prueft auf Ausbrueche mit "..": der Pfad kommt vom anderen Geraet, und
+     * eine Datei ausserhalb des App-Verzeichnisses zu schreiben waere das Letzte,
+     * was eine Synchronisierung tun sollte.
+     */
+    fun relativePathFrom(channelPath: String): String? {
+        if (!channelPath.startsWith(FILE_PATH_PREFIX)) return null
+        val relative = channelPath.removePrefix(FILE_PATH_PREFIX)
+        if (relative.isEmpty() || relative.startsWith("/")) return null
+        if (relative.split("/").any { it == ".." || it.isEmpty() }) return null
+        return relative
+    }
     const val KEY_PAYLOAD: String = "payload"
     const val KEY_UPDATED_AT: String = "updatedAt"
 

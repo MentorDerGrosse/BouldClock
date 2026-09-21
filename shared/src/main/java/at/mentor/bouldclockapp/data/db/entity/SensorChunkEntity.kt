@@ -36,4 +36,57 @@ data class SensorChunkEntity(
 
     /** Nach dem Sync aufs Handy wird die Datei auf der Uhr geloescht. */
     val syncState: SyncState = SyncState.PENDING,
-)
+) {
+    companion object {
+
+        /** Ordner im App-internen Speicher, in dem die Rohsensordateien liegen. */
+        const val DIR = "sensors"
+
+        private const val EXTENSION = ".bcs"
+
+        /**
+         * Der Pfad einer Sensordatei.
+         *
+         * Hier und nicht beim Aufzeichnen, weil ihn inzwischen beide Seiten
+         * brauchen: die Uhr zum Schreiben, das Handy zum Einordnen einer
+         * angekommenen Datei. Zwei Kopien derselben Regel waeren zwei Kopien
+         * zum Auseinanderlaufen.
+         */
+        fun relativePath(sessionId: String, sensor: SensorKind): String =
+            "$DIR/$sessionId/${sensor.name}$EXTENSION"
+
+        /**
+         * Baut eine Zeile aus dem Pfad einer angekommenen Datei.
+         *
+         * Braucht die Gegenstelle, wenn eine Datei vor ihren Metadaten eintrifft:
+         * die Zeilen einer Session kommen als Datenpunkt, die Datei ueber einen
+         * Kanal - zwei Wege, deren Reihenfolge niemand zusichert. Lieber eine
+         * Zeile mit Luecken als eine Datei, die niemand mehr findet; Zeitraum
+         * und Sampleanzahl traegt das Paket nach.
+         *
+         * Gibt null zurueck, wenn der Pfad nicht passt - dann gehoert die Datei
+         * nicht hierher.
+         */
+        fun fromArrivedFile(relativePath: String, sizeBytes: Long): SensorChunkEntity? {
+            val parts = relativePath.split('/')
+            if (parts.size != 3 || parts[0] != DIR) return null
+            val sessionId = parts[1].takeIf { it.isNotEmpty() } ?: return null
+            val sensor = runCatching {
+                SensorKind.valueOf(parts[2].removeSuffix(EXTENSION))
+            }.getOrNull() ?: return null
+
+            return SensorChunkEntity(
+                id = relativePath,
+                sessionId = sessionId,
+                sensor = sensor,
+                relativePath = relativePath,
+                startedAt = 0L,
+                endedAt = 0L,
+                sampleRateHz = 0,
+                sampleCount = 0,
+                sizeBytes = sizeBytes,
+                syncState = SyncState.SYNCED,
+            )
+        }
+    }
+}

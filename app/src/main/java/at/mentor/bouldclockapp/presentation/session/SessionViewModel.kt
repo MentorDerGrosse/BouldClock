@@ -114,7 +114,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         db.sessionSummaryDao().observeRecent(RECENT_SESSIONS)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private val syncSender = SessionSyncSender(application, SessionSyncRepository(db))
+    private val syncSender = SessionSyncSender(application, SessionSyncRepository(db, application.filesDir))
 
     private val restored = MutableStateFlow(false)
     private val choosingRest = MutableStateFlow<Long?>(null)

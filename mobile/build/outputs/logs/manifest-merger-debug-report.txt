@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-34:12
-INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-34:12
-INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-34:12
-INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-34:12
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-36:12
+INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-36:12
+INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-36:12
+INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:1-36:12
 MERGED from [:shared] /home/thomas/BouldClock/shared/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.room:room-runtime-android:2.8.5] /home/thomas/.gradle/caches/9.6.0/transforms/24885a186b744a25e0beba219342c938/transformed/room-runtime/AndroidManifest.xml:17:1-31:12
 MERGED from [androidx.room:room-ktx:2.8.5] /home/thomas/.gradle/caches/9.6.0/transforms/0fc4868a3ed8724692de67964bdacba4/transformed/room-ktx-2.8.5/AndroidManifest.xml:17:1-22:12
@@ -94,8 +94,8 @@ MERGED from [androidx.core:core-viewtree:1.0.0] /home/thomas/.gradle/caches/9.6.
 	xmlns:android
 		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:2:11-69
 application
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:4:5-32:19
-INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:4:5-32:19
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:4:5-34:19
+INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:4:5-34:19
 MERGED from [androidx.room:room-runtime-android:2.8.5] /home/thomas/.gradle/caches/9.6.0/transforms/24885a186b744a25e0beba219342c938/transformed/room-runtime/AndroidManifest.xml:23:5-29:19
 MERGED from [androidx.room:room-runtime-android:2.8.5] /home/thomas/.gradle/caches/9.6.0/transforms/24885a186b744a25e0beba219342c938/transformed/room-runtime/AndroidManifest.xml:23:5-29:19
 MERGED from [androidx.compose.ui:ui-tooling-android:1.12.1] /home/thomas/.gradle/caches/9.6.0/transforms/bb86818432554dd8e123cf379a838ac8/transformed/ui-tooling/AndroidManifest.xml:22:5-26:19
@@ -135,41 +135,45 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /home/thomas/.gradle/caches
 	android:theme
 		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:8:9-48
 service#at.mentor.bouldclockapp.data.sync.SyncListenerService
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:12:9-22:19
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:12:9-24:19
 	android:exported
 		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:14:13-36
 	android:name
 		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:13:13-81
-intent-filter#action:name:com.google.android.gms.wearable.DATA_CHANGED+data:host:*+data:pathPrefix:/bouldclock+data:scheme:wear
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:15:13-21:29
+intent-filter#action:name:com.google.android.gms.wearable.CHANNEL_EVENT+action:name:com.google.android.gms.wearable.DATA_CHANGED+data:host:*+data:pathPrefix:/bouldclock+data:scheme:wear
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:15:13-23:29
 action#com.google.android.gms.wearable.DATA_CHANGED
 ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:16:17-87
 	android:name
 		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:16:25-84
+action#com.google.android.gms.wearable.CHANNEL_EVENT
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:18:17-88
+	android:name
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:18:25-85
 data
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:17:17-20:56
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:19:17-22:56
 	android:host
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:19:21-37
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:21:21-37
 	android:scheme
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:18:21-42
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:20:21-42
 	android:pathPrefix
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:20:21-53
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:22:21-53
 activity#at.mentor.bouldclockapp.mobile.MainActivity
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:24:9-31:20
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:26:9-33:20
 	android:exported
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:26:13-36
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:28:13-36
 	android:name
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:25:13-41
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:27:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:27:13-30:29
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:29:13-32:29
 action#android.intent.action.MAIN
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:28:17-69
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:30:17-69
 	android:name
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:28:25-66
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:30:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:29:17-77
+ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:31:17-77
 	android:name
-		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:29:27-74
+		ADDED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:31:27-74
 uses-sdk
 INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml

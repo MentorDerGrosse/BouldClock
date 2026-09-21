@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:18:27.174Z" hostname="fedora" time="0.003">
+  <properties/>
+  <testcase name="fremde Pfade werden nicht eingeordnet" classname="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" time="0.002"/>
+  <testcase name="Schreiben und Einordnen benutzen denselben Pfad" classname="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" time="0.001"/>
+  <testcase name="Pfad liefert Session und Sensor" classname="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

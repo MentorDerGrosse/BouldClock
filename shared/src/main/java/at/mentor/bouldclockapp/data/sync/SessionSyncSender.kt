@@ -5,6 +5,7 @@ import at.mentor.bouldclockapp.core.diagnostics.Diagnostics
 import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import java.io.File
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -20,6 +21,8 @@ class SessionSyncSender(
 ) {
 
     private val dataClient by lazy { Wearable.getDataClient(context) }
+    private val channelClient by lazy { Wearable.getChannelClient(context) }
+    private val nodeClient by lazy { Wearable.getNodeClient(context) }
 
     /** Gibt zurueck, wie viele Sessions abgelegt wurden. */
     suspend fun syncPending(): Int {
@@ -47,11 +50,19 @@ class SessionSyncSender(
                     TAG,
                     "Session ${session.id.take(8)} abgelegt, ${packed.size} Byte",
                 )
+                // Erst die Zeilen, dann die Dateien - das Handy soll die Session
+                // schon kennen, wenn sie eintreffen.
+                sendSensorFiles(session.id)
             }.onFailure {
                 // Nicht markieren - beim naechsten Versuch noch einmal.
                 Diagnostics.log(context, TAG, "Session ${session.id.take(8)} nicht abgelegt", it)
             }
         }
+
+        // Dateien getrennt nachziehen: sie koennen offen sein, obwohl die
+        // Session selbst laengst drueben ist.
+        repository.sessionsWithPendingFiles().forEach { sendSensorFiles(it) }
+
         return sent
     }
 
@@ -70,6 +81,66 @@ class SessionSyncSender(
         }.onFailure {
             Diagnostics.log(context, TAG, "Session ${sessionId.take(8)} nicht abgelegt", it)
         }.getOrDefault(false)
+    }
+
+    /**
+     * Schickt die Rohsensordateien einer Session.
+     *
+     * Ueber einen Kanal statt als Datenpunkt: mehrere Megabyte gehoeren nicht in
+     * einen Speicher, der dauerhaft vorgehalten wird. Der Kanal ueberträgt am
+     * Stueck - dafuer muessen beide Geraete gleichzeitig erreichbar sein.
+     * Schlaegt es fehl, bleibt die Datei auf PENDING und geht beim naechsten
+     * Mal mit.
+     *
+     * Danach gehen die Zeilen noch einmal raus. Beim Beenden einer Session ist
+     * das Paket naemlich meist schon unterwegs, bevor die Dateien ueberhaupt in
+     * der Datenbank stehen - gemessen lagen zwischen beidem 200 ms. Erst dieser
+     * zweite Lauf enthaelt sie also sicher. Ohne ihn kaeme die Datei an, ohne
+     * dass je eine Zeile auf sie zeigt.
+     */
+    suspend fun sendSensorFiles(sessionId: String): Int {
+        val chunks = repository.pendingChunks(sessionId)
+        if (chunks.isEmpty()) return 0
+
+        val nodes = runCatching { nodeClient.connectedNodes.await() }.getOrDefault(emptyList())
+        if (nodes.isEmpty()) {
+            Diagnostics.log(context, TAG, "Keine Gegenstelle - Dateien warten")
+            return 0
+        }
+
+        var sent = 0
+        chunks.forEach { chunk ->
+            val file = File(context.filesDir, chunk.relativePath)
+            if (!file.exists()) return@forEach
+
+            val ok = nodes.all { node ->
+                runCatching {
+                    val channel = channelClient
+                        .openChannel(node.id, SyncProtocol.filePath(chunk.relativePath))
+                        .await()
+                    channelClient.getOutputStream(channel).await().use { out ->
+                        file.inputStream().use { it.copyTo(out) }
+                    }
+                }.onFailure {
+                    Diagnostics.log(context, TAG, "${chunk.relativePath} nicht gesendet", it)
+                }.isSuccess
+            }
+
+            if (ok) {
+                repository.markChunkSynced(chunk)
+                sent++
+                Diagnostics.log(
+                    context,
+                    TAG,
+                    "${chunk.relativePath} gesendet, ${file.length()} Byte",
+                )
+            }
+        }
+
+        // Jetzt stehen die Zeilen zu diesen Dateien fest - nachreichen.
+        if (sent > 0) sendSession(sessionId)
+
+        return sent
     }
 
     /** Schickt das Profil zur Gegenseite. */

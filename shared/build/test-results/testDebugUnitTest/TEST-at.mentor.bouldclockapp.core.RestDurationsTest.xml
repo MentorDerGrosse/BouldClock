@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.RestDurationsTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:00:09.881Z" hostname="fedora" time="0.007">
+<testsuite name="at.mentor.bouldclockapp.core.RestDurationsTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:18:27.152Z" hostname="fedora" time="0.004">
   <properties/>
-  <testcase name="krumme Sekunden rasten auf das naechste Viertel ein" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.001"/>
+  <testcase name="krumme Sekunden rasten auf das naechste Viertel ein" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.0"/>
   <testcase name="jeder Sessiontyp hat eine waehlbare Voreinstellung" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.001"/>
   <testcase name="die Voreinstellungen trennen die Trainingsformen" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.0"/>
   <testcase name="die Untergrenze deckt das HRR60-Fenster ab" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.0"/>
-  <testcase name="Zerlegen und Zusammensetzen ergibt denselben Wert" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.001"/>
-  <testcase name="Minuten und Sekunden ergeben die Dauer" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.003"/>
+  <testcase name="Zerlegen und Zusammensetzen ergibt denselben Wert" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.0"/>
+  <testcase name="Minuten und Sekunden ergeben die Dauer" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.002"/>
   <testcase name="der Trainingshinweis trennt kurze von langen Pausen" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.0"/>
   <testcase name="clamp haelt die Dauer im waehlbaren Bereich" classname="at.mentor.bouldclockapp.core.RestDurationsTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

@@ -3,16 +3,25 @@ package at.mentor.bouldclockapp.data.sync
 import at.mentor.bouldclockapp.core.model.SyncState
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.db.buildSessionSummary
+import at.mentor.bouldclockapp.data.db.entity.SensorChunkEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
+import java.io.File
 
 /**
  * Packt Sessions fuer die Uebertragung und legt ankommende ab.
  *
  * Auf beiden Geraeten dieselbe Klasse - die Uhr benutzt [buildPayload], das
  * Handy [apply]. Spaeter, wenn am Handy bearbeitet wird, laeuft es umgekehrt.
+ *
+ * [filesDir] ist der App-interne Speicher: nur dort laesst sich nachsehen, ob
+ * eine Sensordatei wirklich liegt. Ohne das muesste man dem Stand der
+ * Gegenstelle glauben, und der sagt etwas anderes - siehe [apply].
  */
-class SessionSyncRepository(private val db: BouldClockDatabase) {
+class SessionSyncRepository(
+    private val db: BouldClockDatabase,
+    private val filesDir: File,
+) {
 
     /** Beendete Sessions, die noch nicht uebertragen wurden. */
     suspend fun pending(): List<SessionEntity> = db.sessionDao().pendingSync()
@@ -24,6 +33,7 @@ class SessionSyncRepository(private val db: BouldClockDatabase) {
             attempts = db.attemptDao().allBySession(sessionId),
             hrSamples = db.hrSampleDao().bySession(sessionId),
             metricSamples = db.metricSampleDao().bySession(sessionId),
+            sensorChunks = db.sensorChunkDao().bySession(sessionId),
         )
     }
 
@@ -45,6 +55,33 @@ class SessionSyncRepository(private val db: BouldClockDatabase) {
         payload.attempts.forEach { db.attemptDao().upsert(it) }
         db.hrSampleDao().insertAll(payload.hrSamples)
         db.metricSampleDao().insertAll(payload.metricSamples)
+
+        // Metadaten aus dem Paket, Ankunftsstand aus der vorhandenen Zeile: eine
+        // schon eingetroffene Datei soll nicht auf "fehlt noch" zurueckfallen,
+        // eine nur aus dem Pfad gebaute Zeile aber ihre Luecken gefuellt bekommen.
+        payload.sensorChunks.forEach { chunk ->
+            val known = db.sensorChunkDao().byRelativePath(chunk.relativePath)
+            db.sensorChunkDao().upsert(
+                if (known == null) {
+                    // "SYNCED" der Gegenstelle heisst nur, dass sie die Datei
+                    // abgeschickt hat - nicht, dass sie hier liegt. Also
+                    // nachsehen: die Datei kann laengst da sein, wenn ihre
+                    // Zeile erst spaeter kommt.
+                    chunk.copy(syncState = arrivalState(chunk.relativePath))
+                } else {
+                    chunk.copy(
+                        id = known.id,
+                        syncState = known.syncState,
+                        // Bei einer angekommenen Datei zaehlt die gemessene Groesse.
+                        sizeBytes = if (known.syncState == SyncState.SYNCED) {
+                            known.sizeBytes
+                        } else {
+                            chunk.sizeBytes
+                        },
+                    )
+                },
+            )
+        }
 
         recomputeSummary(payload.session)
     }
@@ -71,6 +108,36 @@ class SessionSyncRepository(private val db: BouldClockDatabase) {
     }
 
     suspend fun profile(): UserProfileEntity? = db.userProfileDao().get()
+
+    /** Sensordateien einer Session, die noch nicht uebertragen wurden. */
+    suspend fun pendingChunks(sessionId: String): List<SensorChunkEntity> =
+        db.sensorChunkDao().bySession(sessionId).filter { it.syncState == SyncState.PENDING }
+
+    suspend fun sessionsWithPendingFiles(): List<String> =
+        db.sensorChunkDao().sessionsWithPendingFiles()
+
+    suspend fun markChunkSynced(chunk: SensorChunkEntity) {
+        db.sensorChunkDao().upsert(chunk.copy(syncState = SyncState.SYNCED))
+    }
+
+    /** Vermerkt, dass eine Datei angekommen ist. */
+    suspend fun markFileArrived(relativePath: String, sizeBytes: Long) {
+        val dao = db.sensorChunkDao()
+        val existing = dao.byRelativePath(relativePath)
+        if (existing != null) {
+            dao.upsert(existing.copy(syncState = SyncState.SYNCED, sizeBytes = sizeBytes))
+            return
+        }
+
+        // Datei ohne Metadaten. Frueher fiel sie hier stillschweigend heraus:
+        // gespeichert, aber fuer die App unsichtbar, weil nichts auf sie zeigte.
+        // Jetzt reicht der Pfad fuer eine Zeile, den Rest traegt das Paket nach.
+        SensorChunkEntity.fromArrivedFile(relativePath, sizeBytes)?.let { dao.upsert(it) }
+    }
+
+    /** Liegt die Datei hier, gilt sie als angekommen - egal, was das Paket sagt. */
+    private fun arrivalState(relativePath: String): SyncState =
+        if (File(filesDir, relativePath).exists()) SyncState.SYNCED else SyncState.PENDING
 
     /**
      * Legt ein angekommenes Profil ab - wieder gewinnt das juengere.
