@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-20T23:44:32.425Z" hostname="fedora" time="0.008">
+<testsuite name="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:00:09.907Z" hostname="fedora" time="0.009">
   <properties/>
   <testcase name="nach einem Flush ist die Datei auch ohne Schliessen lesbar" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.004"/>
-  <testcase name="lange Sessions passen in das Format" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.001"/>
-  <testcase name="Messpunkte vor der Startzeit werden verworfen" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.0"/>
+  <testcase name="lange Sessions passen in das Format" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.002"/>
+  <testcase name="Messpunkte vor der Startzeit werden verworfen" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.001"/>
   <testcase name="geschriebene Messpunkte kommen unveraendert zurueck" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.001"/>
   <testcase name="falsche Wertezahl macht die Datei nicht kaputt" classname="at.mentor.bouldclockapp.sensor.SensorChunkFormatTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

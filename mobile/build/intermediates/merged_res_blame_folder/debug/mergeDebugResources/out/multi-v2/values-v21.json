@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "at.mentor.bouldclockapp.mobile-mergeDebugResources-39:/values-v21/values-v21.xml",
+            "outputFile": "at.mentor.bouldclockapp.mobile-mergeDebugResources-36:/values-v21/values-v21.xml",
             "map": [
                 {
                     "source": "/home/thomas/.gradle/caches/9.6.0/transforms/a834c68bda081e8f0f2aab68e8d4d4ad/transformed/core-1.16.0/res/values-v21/values-v21.xml",

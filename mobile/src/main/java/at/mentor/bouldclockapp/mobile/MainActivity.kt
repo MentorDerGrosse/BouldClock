@@ -2,118 +2,94 @@ package at.mentor.bouldclockapp.mobile
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import at.mentor.bouldclockapp.core.model.GradeSystem
-import at.mentor.bouldclockapp.core.text.attemptLabel
-import at.mentor.bouldclockapp.core.model.Grades
-import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.roundToInt
+
+/** Welcher Bildschirm gerade offen ist. */
+private sealed interface Screen {
+    data object List : Screen
+    data class Detail(val sessionId: String) : Screen
+    data object Profile : Screen
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                SessionListScreen()
+            BouldClockTheme {
+                BouldClockApp()
             }
         }
     }
 }
 
 /**
- * Die nackte Liste angekommener Sessions.
+ * Drei Bildschirme, ein Zustand.
  *
- * Bewusst ohne Diagramme und ohne Bearbeitung: erst soll das Rohr stehen und
- * nachweislich Daten liefern. Alles Schoene kommt darauf.
+ * Bewusst ohne Navigationsbibliothek: bei drei Zielen waere sie mehr Aufwand als
+ * Nutzen. Wenn Diagramme und Boulderverwaltung dazukommen, wird das der Moment,
+ * sie einzufuehren.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SessionListScreen() {
-    val viewModel: SessionListViewModel = viewModel()
-    val summaries by viewModel.summaries.collectAsStateWithLifecycle()
+private fun BouldClockApp() {
+    val viewModel: MobileViewModel = viewModel()
+    var screen by remember { mutableStateOf<Screen>(Screen.List) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("BouldClock") })
-        },
-    ) { padding ->
-        if (summaries.isEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = "Noch keine Sessions angekommen",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = "Beende eine Session auf der Uhr.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(summaries, key = { it.sessionId }) { summary ->
-                    SummaryCard(summary)
-                }
-            }
-        }
+    BackHandler(enabled = screen !is Screen.List) {
+        viewModel.openSession(null)
+        screen = Screen.List
     }
-}
 
-@Composable
-private fun SummaryCard(summary: SessionSummaryEntity) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = DATE_FORMAT.format(Date(summary.startedAt)),
-                style = MaterialTheme.typography.titleMedium,
+    when (val current = screen) {
+        Screen.List -> {
+            val summaries by viewModel.summaries.collectAsStateWithLifecycle()
+            SessionListScreen(
+                summaries = summaries,
+                onOpenSession = { id ->
+                    viewModel.openSession(id)
+                    screen = Screen.Detail(id)
+                },
+                onOpenProfile = { screen = Screen.Profile },
             )
-            Text(
-                text = describe(summary),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        }
+
+        is Screen.Detail -> {
+            val detail by viewModel.detail.collectAsStateWithLifecycle()
+            SessionDetailScreen(
+                detail = detail,
+                onBack = {
+                    viewModel.openSession(null)
+                    screen = Screen.List
+                },
+                onRpeChange = { viewModel.setRpe(current.sessionId, it) },
+                onNoteChange = { viewModel.setNote(current.sessionId, it) },
+                onOutcomeChange = { attemptId, outcome ->
+                    viewModel.setAttemptOutcome(current.sessionId, attemptId, outcome)
+                },
+                onGradeChange = { attemptId, grade ->
+                    viewModel.setAttemptGrade(current.sessionId, attemptId, grade)
+                },
+                onDeleteAttempt = { viewModel.deleteAttempt(current.sessionId, it) },
+            )
+        }
+
+        Screen.Profile -> {
+            val profile by viewModel.profile.collectAsStateWithLifecycle()
+            ProfileScreen(
+                profile = profile,
+                onSave = { weight, age, sex ->
+                    viewModel.saveProfile(weight, age, sex)
+                    screen = Screen.List
+                },
+                onBack = { screen = Screen.List },
             )
         }
     }
 }
-
-private fun describe(summary: SessionSummaryEntity): String = listOfNotNull(
-    attemptLabel(summary.attemptCount),
-    "${summary.sendCount} Tops",
-    summary.hardestSendValue?.let { Grades.label(it, GradeSystem.FONT) },
-    summary.caloriesTotal?.let { "${it.roundToInt()} kcal" },
-    summary.climbHeightMeters?.let { String.format(Locale.GERMAN, "%.1f m", it) },
-).joinToString(" · ")
-
-private val DATE_FORMAT = SimpleDateFormat("EEEE, d. MMMM yyyy, HH:mm", Locale.GERMAN)

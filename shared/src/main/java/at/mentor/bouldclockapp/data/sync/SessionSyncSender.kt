@@ -55,6 +55,41 @@ class SessionSyncSender(
         return sent
     }
 
+    /** Schickt eine einzelne Session, etwa nach einer Aenderung am Handy. */
+    suspend fun sendSession(sessionId: String): Boolean {
+        val payload = repository.buildPayload(sessionId) ?: return false
+        val packed = SyncProtocol.pack(payload.toJson())
+        return runCatching {
+            val request = PutDataMapRequest.create(SyncProtocol.sessionPath(sessionId)).apply {
+                dataMap.putAsset(SyncProtocol.KEY_PAYLOAD, Asset.createFromBytes(packed))
+                dataMap.putLong(SyncProtocol.KEY_UPDATED_AT, System.currentTimeMillis())
+            }.asPutDataRequest().setUrgent()
+            dataClient.putDataItem(request).await()
+            repository.markSynced(sessionId)
+            true
+        }.onFailure {
+            Diagnostics.log(context, TAG, "Session ${sessionId.take(8)} nicht abgelegt", it)
+        }.getOrDefault(false)
+    }
+
+    /** Schickt das Profil zur Gegenseite. */
+    suspend fun sendProfile(): Boolean {
+        val profile = repository.profile() ?: return false
+        val packed = SyncProtocol.pack(ProfilePayload(profile).toJson())
+        return runCatching {
+            val request = PutDataMapRequest.create(SyncProtocol.PROFILE_PATH).apply {
+                dataMap.putAsset(SyncProtocol.KEY_PAYLOAD, Asset.createFromBytes(packed))
+                dataMap.putLong(SyncProtocol.KEY_UPDATED_AT, profile.meta.updatedAt)
+            }.asPutDataRequest().setUrgent()
+            dataClient.putDataItem(request).await()
+            repository.markProfileSynced()
+            Diagnostics.log(context, TAG, "Profil abgelegt")
+            true
+        }.onFailure {
+            Diagnostics.log(context, TAG, "Profil nicht abgelegt", it)
+        }.getOrDefault(false)
+    }
+
     private companion object {
         const val TAG = "BouldClockSync"
     }

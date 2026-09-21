@@ -4,6 +4,7 @@ import at.mentor.bouldclockapp.core.model.SyncState
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.db.buildSessionSummary
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
+import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 
 /**
  * Packt Sessions fuer die Uebertragung und legt ankommende ab.
@@ -48,6 +49,11 @@ class SessionSyncRepository(private val db: BouldClockDatabase) {
         recomputeSummary(payload.session)
     }
 
+    /** Nach einer Aenderung am Handy neu rechnen - die Zusammenfassung ist nur ein Zwischenspeicher. */
+    suspend fun refreshSummary(sessionId: String) {
+        db.sessionDao().byId(sessionId)?.let { recomputeSummary(it) }
+    }
+
     private suspend fun recomputeSummary(session: SessionEntity) {
         val endedAt = session.endedAt ?: return
         db.sessionSummaryDao().upsert(
@@ -61,6 +67,29 @@ class SessionSyncRepository(private val db: BouldClockDatabase) {
                 caloriesOnWall = null,
                 now = System.currentTimeMillis(),
             ),
+        )
+    }
+
+    suspend fun profile(): UserProfileEntity? = db.userProfileDao().get()
+
+    /**
+     * Legt ein angekommenes Profil ab - wieder gewinnt das juengere.
+     *
+     * Gibt zurueck, ob uebernommen wurde; die Uhr protokolliert das, weil ein
+     * stillschweigend verworfenes Profil sonst schwer zu erklaeren waere.
+     */
+    suspend fun applyProfile(payload: ProfilePayload): Boolean {
+        val existing = db.userProfileDao().get()
+        if (existing != null && existing.meta.updatedAt >= payload.profile.meta.updatedAt) return false
+        db.userProfileDao().upsert(payload.profile)
+        return true
+    }
+
+    /** Merkt, dass das Profil uebertragen wurde. */
+    suspend fun markProfileSynced() {
+        val profile = db.userProfileDao().get() ?: return
+        db.userProfileDao().upsert(
+            profile.copy(meta = profile.meta.copy(syncState = SyncState.SYNCED)),
         )
     }
 

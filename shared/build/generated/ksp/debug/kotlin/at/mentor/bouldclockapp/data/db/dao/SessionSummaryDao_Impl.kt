@@ -317,6 +317,129 @@ public class SessionSummaryDao_Impl(
     }
   }
 
+  public override fun observeBySession(sessionId: String): Flow<SessionSummaryEntity?> {
+    val _sql: String = "SELECT * FROM session_summary WHERE sessionId = ?"
+    return createFlow(__db, false, arrayOf("session_summary")) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        _stmt.bindText(_argIndex, sessionId)
+        val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
+        val _columnIndexOfGymId: Int = getColumnIndexOrThrow(_stmt, "gymId")
+        val _columnIndexOfType: Int = getColumnIndexOrThrow(_stmt, "type")
+        val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
+        val _columnIndexOfTotalMs: Int = getColumnIndexOrThrow(_stmt, "totalMs")
+        val _columnIndexOfWorkMs: Int = getColumnIndexOrThrow(_stmt, "workMs")
+        val _columnIndexOfRestMs: Int = getColumnIndexOrThrow(_stmt, "restMs")
+        val _columnIndexOfPausedMs: Int = getColumnIndexOrThrow(_stmt, "pausedMs")
+        val _columnIndexOfAttemptCount: Int = getColumnIndexOrThrow(_stmt, "attemptCount")
+        val _columnIndexOfSendCount: Int = getColumnIndexOrThrow(_stmt, "sendCount")
+        val _columnIndexOfFlashCount: Int = getColumnIndexOrThrow(_stmt, "flashCount")
+        val _columnIndexOfHardestSendValue: Int = getColumnIndexOrThrow(_stmt, "hardestSendValue")
+        val _columnIndexOfHrAvg: Int = getColumnIndexOrThrow(_stmt, "hrAvg")
+        val _columnIndexOfHrMax: Int = getColumnIndexOrThrow(_stmt, "hrMax")
+        val _columnIndexOfHrr60Avg: Int = getColumnIndexOrThrow(_stmt, "hrr60Avg")
+        val _columnIndexOfCaloriesTotal: Int = getColumnIndexOrThrow(_stmt, "caloriesTotal")
+        val _columnIndexOfCaloriesOnWall: Int = getColumnIndexOrThrow(_stmt, "caloriesOnWall")
+        val _columnIndexOfClimbHeightMeters: Int = getColumnIndexOrThrow(_stmt, "climbHeightMeters")
+        val _columnIndexOfMaxClimbHeightMeters: Int = getColumnIndexOrThrow(_stmt, "maxClimbHeightMeters")
+        val _columnIndexOfRpe: Int = getColumnIndexOrThrow(_stmt, "rpe")
+        val _columnIndexOfComputedAt: Int = getColumnIndexOrThrow(_stmt, "computedAt")
+        val _result: SessionSummaryEntity?
+        if (_stmt.step()) {
+          val _tmpSessionId: String
+          _tmpSessionId = _stmt.getText(_columnIndexOfSessionId)
+          val _tmpGymId: String?
+          if (_stmt.isNull(_columnIndexOfGymId)) {
+            _tmpGymId = null
+          } else {
+            _tmpGymId = _stmt.getText(_columnIndexOfGymId)
+          }
+          val _tmpType: SessionType
+          _tmpType = __SessionType_stringToEnum(_stmt.getText(_columnIndexOfType))
+          val _tmpStartedAt: Long
+          _tmpStartedAt = _stmt.getLong(_columnIndexOfStartedAt)
+          val _tmpTotalMs: Long
+          _tmpTotalMs = _stmt.getLong(_columnIndexOfTotalMs)
+          val _tmpWorkMs: Long
+          _tmpWorkMs = _stmt.getLong(_columnIndexOfWorkMs)
+          val _tmpRestMs: Long
+          _tmpRestMs = _stmt.getLong(_columnIndexOfRestMs)
+          val _tmpPausedMs: Long
+          _tmpPausedMs = _stmt.getLong(_columnIndexOfPausedMs)
+          val _tmpAttemptCount: Int
+          _tmpAttemptCount = _stmt.getLong(_columnIndexOfAttemptCount).toInt()
+          val _tmpSendCount: Int
+          _tmpSendCount = _stmt.getLong(_columnIndexOfSendCount).toInt()
+          val _tmpFlashCount: Int
+          _tmpFlashCount = _stmt.getLong(_columnIndexOfFlashCount).toInt()
+          val _tmpHardestSendValue: Int?
+          if (_stmt.isNull(_columnIndexOfHardestSendValue)) {
+            _tmpHardestSendValue = null
+          } else {
+            _tmpHardestSendValue = _stmt.getLong(_columnIndexOfHardestSendValue).toInt()
+          }
+          val _tmpHrAvg: Int?
+          if (_stmt.isNull(_columnIndexOfHrAvg)) {
+            _tmpHrAvg = null
+          } else {
+            _tmpHrAvg = _stmt.getLong(_columnIndexOfHrAvg).toInt()
+          }
+          val _tmpHrMax: Int?
+          if (_stmt.isNull(_columnIndexOfHrMax)) {
+            _tmpHrMax = null
+          } else {
+            _tmpHrMax = _stmt.getLong(_columnIndexOfHrMax).toInt()
+          }
+          val _tmpHrr60Avg: Int?
+          if (_stmt.isNull(_columnIndexOfHrr60Avg)) {
+            _tmpHrr60Avg = null
+          } else {
+            _tmpHrr60Avg = _stmt.getLong(_columnIndexOfHrr60Avg).toInt()
+          }
+          val _tmpCaloriesTotal: Double?
+          if (_stmt.isNull(_columnIndexOfCaloriesTotal)) {
+            _tmpCaloriesTotal = null
+          } else {
+            _tmpCaloriesTotal = _stmt.getDouble(_columnIndexOfCaloriesTotal)
+          }
+          val _tmpCaloriesOnWall: Double?
+          if (_stmt.isNull(_columnIndexOfCaloriesOnWall)) {
+            _tmpCaloriesOnWall = null
+          } else {
+            _tmpCaloriesOnWall = _stmt.getDouble(_columnIndexOfCaloriesOnWall)
+          }
+          val _tmpClimbHeightMeters: Double?
+          if (_stmt.isNull(_columnIndexOfClimbHeightMeters)) {
+            _tmpClimbHeightMeters = null
+          } else {
+            _tmpClimbHeightMeters = _stmt.getDouble(_columnIndexOfClimbHeightMeters)
+          }
+          val _tmpMaxClimbHeightMeters: Double?
+          if (_stmt.isNull(_columnIndexOfMaxClimbHeightMeters)) {
+            _tmpMaxClimbHeightMeters = null
+          } else {
+            _tmpMaxClimbHeightMeters = _stmt.getDouble(_columnIndexOfMaxClimbHeightMeters)
+          }
+          val _tmpRpe: Int?
+          if (_stmt.isNull(_columnIndexOfRpe)) {
+            _tmpRpe = null
+          } else {
+            _tmpRpe = _stmt.getLong(_columnIndexOfRpe).toInt()
+          }
+          val _tmpComputedAt: Long
+          _tmpComputedAt = _stmt.getLong(_columnIndexOfComputedAt)
+          _result = SessionSummaryEntity(_tmpSessionId,_tmpGymId,_tmpType,_tmpStartedAt,_tmpTotalMs,_tmpWorkMs,_tmpRestMs,_tmpPausedMs,_tmpAttemptCount,_tmpSendCount,_tmpFlashCount,_tmpHardestSendValue,_tmpHrAvg,_tmpHrMax,_tmpHrr60Avg,_tmpCaloriesTotal,_tmpCaloriesOnWall,_tmpClimbHeightMeters,_tmpMaxClimbHeightMeters,_tmpRpe,_tmpComputedAt)
+        } else {
+          _result = null
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override fun observeRecent(limit: Int): Flow<List<SessionSummaryEntity>> {
     val _sql: String = "SELECT * FROM session_summary ORDER BY startedAt DESC LIMIT ?"
     return createFlow(__db, false, arrayOf("session_summary")) { _connection ->

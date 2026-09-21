@@ -152,6 +152,11 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             // Beim Start nachholen, was beim letzten Mal nicht durchging - etwa
             // weil das Handy in der Halle nicht in Reichweite war.
             syncSender.syncPending()
+
+            // Das Profil legt meist die Uhr an, bearbeitet wird es am Handy.
+            // Ohne diesen Anstoss saehe das Handy es nie und boete beim ersten
+            // Oeffnen leere Voreinstellungen an.
+            syncSender.sendProfile()
         }
 
         viewModelScope.launch {
@@ -184,6 +189,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     meta = RecordMeta.now(now),
                 ),
             )
+            syncSender.sendProfile()
         }
     }
 

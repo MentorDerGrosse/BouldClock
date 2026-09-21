@@ -16,6 +16,9 @@ interface SessionSummaryDao {
     @Query("SELECT * FROM session_summary WHERE sessionId = :sessionId")
     suspend fun bySession(sessionId: String): SessionSummaryEntity?
 
+    @Query("SELECT * FROM session_summary WHERE sessionId = :sessionId")
+    fun observeBySession(sessionId: String): Flow<SessionSummaryEntity?>
+
     /** Die Historie auf der Uhr: zehn Zeilen lesen, nichts rechnen. */
     @Query("SELECT * FROM session_summary ORDER BY startedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<SessionSummaryEntity>>

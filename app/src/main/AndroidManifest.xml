@@ -47,6 +47,20 @@
             android:exported="false"
             android:foregroundServiceType="health" />
 
+        <!-- Weckt die App, sobald die Gegenseite etwas ablegt - auch wenn sie
+             geschlossen ist. Dieselbe Klasse auf Uhr und Handy. -->
+        <service
+            android:name="at.mentor.bouldclockapp.data.sync.SyncListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/bouldclock" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".presentation.MainActivity"
             android:exported="true"

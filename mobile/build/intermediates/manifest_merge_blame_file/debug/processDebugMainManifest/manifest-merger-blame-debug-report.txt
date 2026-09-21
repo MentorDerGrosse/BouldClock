@@ -39,13 +39,13 @@
 24-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:8:9-48
 25
 26        <!--
-27             Weckt die App, sobald die Uhr eine Session ablegt - auch wenn sie
-28             geschlossen ist.
+27             Weckt die App, sobald die Gegenseite etwas ablegt - auch wenn sie
+28             geschlossen ist. Dieselbe Klasse auf Uhr und Handy.
 29        -->
 30        <service
 30-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:12:9-22:19
-31            android:name="at.mentor.bouldclockapp.mobile.SessionSyncListenerService"
-31-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:13:13-55
+31            android:name="at.mentor.bouldclockapp.data.sync.SyncListenerService"
+31-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:13:13-81
 32            android:exported="true" >
 32-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:14:13-36
 33            <intent-filter>
@@ -55,11 +55,11 @@
 34-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:16:25-84
 35
 36                <data
-36-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:17:17-20:64
+36-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:17:17-20:56
 37                    android:host="*"
 37-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:19:21-37
-38                    android:pathPrefix="/bouldclock/session"
-38-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:20:21-61
+38                    android:pathPrefix="/bouldclock"
+38-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:20:21-53
 39                    android:scheme="wear" />
 39-->/home/thomas/BouldClock/mobile/src/main/AndroidManifest.xml:18:21-42
 40            </intent-filter>
@@ -93,11 +93,11 @@
 56-->[androidx.room:room-runtime-android:2.8.5] /home/thomas/.gradle/caches/9.6.0/transforms/24885a186b744a25e0beba219342c938/transformed/room-runtime/AndroidManifest.xml:27:13-37
 57
 58        <activity
-58-->[androidx.compose.ui:ui-tooling-android:1.11.0] /home/thomas/.gradle/caches/9.6.0/transforms/efaf62a9c2023734df6c45abce1ae5bb/transformed/ui-tooling/AndroidManifest.xml:23:9-25:39
+58-->[androidx.compose.ui:ui-tooling-android:1.12.1] /home/thomas/.gradle/caches/9.6.0/transforms/bb86818432554dd8e123cf379a838ac8/transformed/ui-tooling/AndroidManifest.xml:23:9-25:39
 59            android:name="androidx.compose.ui.tooling.PreviewActivity"
-59-->[androidx.compose.ui:ui-tooling-android:1.11.0] /home/thomas/.gradle/caches/9.6.0/transforms/efaf62a9c2023734df6c45abce1ae5bb/transformed/ui-tooling/AndroidManifest.xml:24:13-71
+59-->[androidx.compose.ui:ui-tooling-android:1.12.1] /home/thomas/.gradle/caches/9.6.0/transforms/bb86818432554dd8e123cf379a838ac8/transformed/ui-tooling/AndroidManifest.xml:24:13-71
 60            android:exported="true" />
-60-->[androidx.compose.ui:ui-tooling-android:1.11.0] /home/thomas/.gradle/caches/9.6.0/transforms/efaf62a9c2023734df6c45abce1ae5bb/transformed/ui-tooling/AndroidManifest.xml:25:13-36
+60-->[androidx.compose.ui:ui-tooling-android:1.12.1] /home/thomas/.gradle/caches/9.6.0/transforms/bb86818432554dd8e123cf379a838ac8/transformed/ui-tooling/AndroidManifest.xml:25:13-36
 61        <activity
 61-->[com.google.android.gms:play-services-base:18.0.1] /home/thomas/.gradle/caches/9.6.0/transforms/52596716410841950b3fd40629795b82/transformed/play-services-base-18.0.1/AndroidManifest.xml:20:9-22:45
 62            android:name="com.google.android.gms.common.api.GoogleApiActivity"

@@ -7,17 +7,17 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BouldClock">
 
-        <!-- Weckt die App, sobald die Uhr eine Session ablegt - auch wenn sie
-             geschlossen ist. -->
+        <!-- Weckt die App, sobald die Gegenseite etwas ablegt - auch wenn sie
+             geschlossen ist. Dieselbe Klasse auf Uhr und Handy. -->
         <service
-            android:name=".SessionSyncListenerService"
+            android:name="at.mentor.bouldclockapp.data.sync.SyncListenerService"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
                 <data
                     android:scheme="wear"
                     android:host="*"
-                    android:pathPrefix="/bouldclock/session" />
+                    android:pathPrefix="/bouldclock" />
             </intent-filter>
         </service>
 

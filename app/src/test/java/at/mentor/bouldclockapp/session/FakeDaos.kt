@@ -216,6 +216,9 @@ class FakeSummaryDao : SessionSummaryDao {
 
     override suspend fun bySession(sessionId: String): SessionSummaryEntity? = summaries[sessionId]
 
+    override fun observeBySession(sessionId: String): Flow<SessionSummaryEntity?> =
+        flowOf(summaries[sessionId])
+
     override fun observeRecent(limit: Int): Flow<List<SessionSummaryEntity>> = flowOf(summaries.values.toList())
 
     override suspend fun baseline(

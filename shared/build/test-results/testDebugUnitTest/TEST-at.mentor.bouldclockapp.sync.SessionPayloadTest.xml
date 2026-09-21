@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.sync.SessionPayloadTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-20T23:44:32.436Z" hostname="fedora" time="0.033">
+<testsuite name="at.mentor.bouldclockapp.sync.SessionPayloadTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:00:09.919Z" hostname="fedora" time="0.035">
   <properties/>
-  <testcase name="unbekannte Felder werden ignoriert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.022"/>
+  <testcase name="unbekannte Felder werden ignoriert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.018"/>
   <testcase name="ein Paket ueberlebt Hin- und Rueckweg unveraendert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.001"/>
   <testcase name="empfangene Daten gelten als synchronisiert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.001"/>
-  <testcase name="ein kaputter Versuch kippt nicht das ganze Paket" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.002"/>
+  <testcase name="ein kaputter Versuch kippt nicht das ganze Paket" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.004"/>
   <testcase name="fehlende Felder bekommen Voreinstellungen" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.002"/>
-  <testcase name="Pulswerte werden kompakt geschrieben" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.005"/>
+  <testcase name="Pulswerte werden kompakt geschrieben" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.008"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -20,6 +20,9 @@ import java.util.zip.GZIPOutputStream
 object SyncProtocol {
 
     const val SESSION_PATH_PREFIX: String = "/bouldclock/session"
+
+    /** Das Profil - eine einzige Zeile, die in beide Richtungen wandert. */
+    const val PROFILE_PATH: String = "/bouldclock/profile"
     const val KEY_PAYLOAD: String = "payload"
     const val KEY_UPDATED_AT: String = "updatedAt"
 
