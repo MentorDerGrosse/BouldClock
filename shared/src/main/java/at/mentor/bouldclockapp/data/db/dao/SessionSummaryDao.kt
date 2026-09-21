@@ -23,6 +23,27 @@ interface SessionSummaryDao {
     @Query("SELECT * FROM session_summary ORDER BY startedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<SessionSummaryEntity>>
 
+    /**
+     * Alles fuer die Auswertung am Handy.
+     *
+     * Ohne Grenze und ohne Aggregat in SQL: ein paar hundert Zeilen, und das
+     * Zusammenfassen nach Woche, Monat und Jahr passiert in
+     * [at.mentor.bouldclockapp.core.metrics.bucket] - dort ist es ohne
+     * Datenbank testbar und kennt die Zeitzone des Geraets.
+     */
+    @Query("SELECT * FROM session_summary ORDER BY startedAt DESC")
+    fun observeAll(): Flow<List<SessionSummaryEntity>>
+
+    /**
+     * Entfernt die Zusammenfassung einer Session.
+     *
+     * Sie ist ein Zwischenspeicher, kein Rohdatum - und sie ist die Quelle
+     * saemtlicher Summen. Faellt sie weg, verschwindet die geloeschte Session
+     * ueberall: aus der Historie, den Hoehenmetern, den Diagrammen.
+     */
+    @Query("DELETE FROM session_summary WHERE sessionId = :sessionId")
+    suspend fun deleteForSession(sessionId: String)
+
     /** Referenzwerte fuer "dein Schnitt sind 31" - nur vergleichbare Sessions. */
     @Query(
         """

@@ -148,7 +148,81 @@ interface AttemptDao {
         """,
     )
     suspend fun aggregate(sessionId: String): AttemptAggregate
+
+    /**
+     * Gradverteilung ueber alle Sessions - die Gradpyramide.
+     *
+     * Der Join auf `session` ist noetig, weil ein Versuch nichts davon weiss,
+     * dass seine Session geloescht wurde: der Soft Delete setzt `deletedAt` nur
+     * an der Session. Ohne den Join taucht ein geloeschter Abend in der
+     * Pyramide weiter auf.
+     */
+    @Query(
+        """
+        SELECT
+            a.gradeValue                                                    AS gradeValue,
+            COUNT(*)                                                        AS attemptCount,
+            COALESCE(SUM(CASE WHEN a.outcome IN ('FLASH','TOP') THEN 1 ELSE 0 END), 0) AS sendCount,
+            COALESCE(SUM(CASE WHEN a.outcome = 'FLASH' THEN 1 ELSE 0 END), 0)          AS flashCount
+        FROM attempt a
+        JOIN session s ON s.id = a.sessionId
+        WHERE a.deletedAt IS NULL
+          AND a.endedAt IS NOT NULL
+          AND a.gradeValue IS NOT NULL
+          AND s.deletedAt IS NULL
+          AND s.state = 'FINISHED'
+          AND a.startedAt >= :since
+        GROUP BY a.gradeValue
+        ORDER BY a.gradeValue
+        """,
+    )
+    fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>>
+
+    /** Ordnet einen Versuch einem Boulder zu - das Zusammenfuehren am Handy. */
+    @Query(
+        """
+        UPDATE attempt SET problemId = :problemId, updatedAt = :now, syncState = 'PENDING'
+        WHERE id = :attemptId
+        """,
+    )
+    suspend fun setProblem(attemptId: String, problemId: String?, now: Long)
+
+    /** Wie oft an einem Boulder gearbeitet wurde, ueber alle Sessions. */
+    @Query(
+        """
+        SELECT
+            a.problemId                                                     AS problemId,
+            COUNT(*)                                                        AS attemptCount,
+            COALESCE(SUM(CASE WHEN a.outcome IN ('FLASH','TOP') THEN 1 ELSE 0 END), 0) AS sendCount,
+            MIN(a.startedAt)                                                AS firstAt,
+            MAX(a.startedAt)                                                AS lastAt
+        FROM attempt a
+        JOIN session s ON s.id = a.sessionId
+        WHERE a.problemId IS NOT NULL
+          AND a.deletedAt IS NULL
+          AND s.deletedAt IS NULL
+        GROUP BY a.problemId
+        """,
+    )
+    fun observeProblemTallies(): Flow<List<ProblemTally>>
 }
+
+/** Eine Stufe der Gradpyramide. */
+data class GradeBucket(
+    val gradeValue: Int,
+    val attemptCount: Int,
+    val sendCount: Int,
+    val flashCount: Int,
+)
+
+/** Versuchsbilanz eines Boulders ueber alle Sessions. */
+data class ProblemTally(
+    val problemId: String,
+    val attemptCount: Int,
+    val sendCount: Int,
+    val firstAt: Long,
+    val lastAt: Long,
+)
 
 /** Projektion von [AttemptDao.aggregate]. */
 data class AttemptAggregate(

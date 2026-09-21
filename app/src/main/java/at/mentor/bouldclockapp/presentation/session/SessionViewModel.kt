@@ -19,6 +19,7 @@ import at.mentor.bouldclockapp.data.sync.SessionSyncSender
 import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
+import at.mentor.bouldclockapp.data.health.HeartRateState
 import at.mentor.bouldclockapp.data.session.LiveMetrics
 import at.mentor.bouldclockapp.data.session.SessionController
 import at.mentor.bouldclockapp.data.session.SessionRecordingService
@@ -94,6 +95,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     /** Laufende Messwerte fuer die Live-Seite. Kommen vom Aufzeichnungsdienst. */
     val liveBpm: StateFlow<Int?> = LiveMetrics.bpm
+    val liveHeartRateState: StateFlow<HeartRateState> = LiveMetrics.heartRate
     val liveKcal: StateFlow<Double?> = LiveMetrics.kcal
     val liveClimbHeightMeters: StateFlow<Double?> = LiveMetrics.elevationGainMeters
 

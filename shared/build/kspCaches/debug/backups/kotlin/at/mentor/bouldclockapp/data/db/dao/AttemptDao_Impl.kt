@@ -1663,6 +1663,104 @@ public class AttemptDao_Impl(
     }
   }
 
+  public override fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>> {
+    val _sql: String = """
+        |
+        |        SELECT
+        |            a.gradeValue                                                    AS gradeValue,
+        |            COUNT(*)                                                        AS attemptCount,
+        |            COALESCE(SUM(CASE WHEN a.outcome IN ('FLASH','TOP') THEN 1 ELSE 0 END), 0) AS sendCount,
+        |            COALESCE(SUM(CASE WHEN a.outcome = 'FLASH' THEN 1 ELSE 0 END), 0)          AS flashCount
+        |        FROM attempt a
+        |        JOIN session s ON s.id = a.sessionId
+        |        WHERE a.deletedAt IS NULL
+        |          AND a.endedAt IS NOT NULL
+        |          AND a.gradeValue IS NOT NULL
+        |          AND s.deletedAt IS NULL
+        |          AND s.state = 'FINISHED'
+        |          AND a.startedAt >= ?
+        |        GROUP BY a.gradeValue
+        |        ORDER BY a.gradeValue
+        |        
+        """.trimMargin()
+    return createFlow(__db, false, arrayOf("attempt", "session")) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        _stmt.bindLong(_argIndex, since)
+        val _columnIndexOfGradeValue: Int = 0
+        val _columnIndexOfAttemptCount: Int = 1
+        val _columnIndexOfSendCount: Int = 2
+        val _columnIndexOfFlashCount: Int = 3
+        val _result: MutableList<GradeBucket> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: GradeBucket
+          val _tmpGradeValue: Int
+          _tmpGradeValue = _stmt.getLong(_columnIndexOfGradeValue).toInt()
+          val _tmpAttemptCount: Int
+          _tmpAttemptCount = _stmt.getLong(_columnIndexOfAttemptCount).toInt()
+          val _tmpSendCount: Int
+          _tmpSendCount = _stmt.getLong(_columnIndexOfSendCount).toInt()
+          val _tmpFlashCount: Int
+          _tmpFlashCount = _stmt.getLong(_columnIndexOfFlashCount).toInt()
+          _item = GradeBucket(_tmpGradeValue,_tmpAttemptCount,_tmpSendCount,_tmpFlashCount)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
+  public override fun observeProblemTallies(): Flow<List<ProblemTally>> {
+    val _sql: String = """
+        |
+        |        SELECT
+        |            a.problemId                                                     AS problemId,
+        |            COUNT(*)                                                        AS attemptCount,
+        |            COALESCE(SUM(CASE WHEN a.outcome IN ('FLASH','TOP') THEN 1 ELSE 0 END), 0) AS sendCount,
+        |            MIN(a.startedAt)                                                AS firstAt,
+        |            MAX(a.startedAt)                                                AS lastAt
+        |        FROM attempt a
+        |        JOIN session s ON s.id = a.sessionId
+        |        WHERE a.problemId IS NOT NULL
+        |          AND a.deletedAt IS NULL
+        |          AND s.deletedAt IS NULL
+        |        GROUP BY a.problemId
+        |        
+        """.trimMargin()
+    return createFlow(__db, false, arrayOf("attempt", "session")) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _columnIndexOfProblemId: Int = 0
+        val _columnIndexOfAttemptCount: Int = 1
+        val _columnIndexOfSendCount: Int = 2
+        val _columnIndexOfFirstAt: Int = 3
+        val _columnIndexOfLastAt: Int = 4
+        val _result: MutableList<ProblemTally> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: ProblemTally
+          val _tmpProblemId: String
+          _tmpProblemId = _stmt.getText(_columnIndexOfProblemId)
+          val _tmpAttemptCount: Int
+          _tmpAttemptCount = _stmt.getLong(_columnIndexOfAttemptCount).toInt()
+          val _tmpSendCount: Int
+          _tmpSendCount = _stmt.getLong(_columnIndexOfSendCount).toInt()
+          val _tmpFirstAt: Long
+          _tmpFirstAt = _stmt.getLong(_columnIndexOfFirstAt)
+          val _tmpLastAt: Long
+          _tmpLastAt = _stmt.getLong(_columnIndexOfLastAt)
+          _item = ProblemTally(_tmpProblemId,_tmpAttemptCount,_tmpSendCount,_tmpFirstAt,_tmpLastAt)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override suspend fun delete(id: String) {
     val _sql: String = "DELETE FROM attempt WHERE id = ?"
     return performSuspending(__db, false, true) { _connection ->
@@ -1688,6 +1786,37 @@ public class AttemptDao_Impl(
         _stmt.bindLong(_argIndex, now)
         _argIndex = 3
         _stmt.bindText(_argIndex, id)
+        _stmt.step()
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
+  public override suspend fun setProblem(
+    attemptId: String,
+    problemId: String?,
+    now: Long,
+  ) {
+    val _sql: String = """
+        |
+        |        UPDATE attempt SET problemId = ?, updatedAt = ?, syncState = 'PENDING'
+        |        WHERE id = ?
+        |        
+        """.trimMargin()
+    return performSuspending(__db, false, true) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        if (problemId == null) {
+          _stmt.bindNull(_argIndex)
+        } else {
+          _stmt.bindText(_argIndex, problemId)
+        }
+        _argIndex = 2
+        _stmt.bindLong(_argIndex, now)
+        _argIndex = 3
+        _stmt.bindText(_argIndex, attemptId)
         _stmt.step()
       } finally {
         _stmt.close()

@@ -1,6 +1,7 @@
 package at.mentor.bouldclockapp.data.sync
 
 import at.mentor.bouldclockapp.core.diagnostics.Diagnostics
+import at.mentor.bouldclockapp.core.text.attemptLabel
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.Asset
@@ -96,7 +97,7 @@ class SyncListenerService : WearableListenerService() {
             applicationContext,
             TAG,
             "Session ${payload.session.id.take(8)} uebernommen: " +
-                "${payload.attempts.size} Versuche, ${payload.hrSamples.size} Pulswerte",
+                "${attemptLabel(payload.attempts.size)}, ${payload.hrSamples.size} Pulswerte",
         )
     }
 

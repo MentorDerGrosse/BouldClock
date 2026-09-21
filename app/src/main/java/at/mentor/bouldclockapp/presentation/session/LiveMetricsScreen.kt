@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
+import at.mentor.bouldclockapp.data.health.HeartRateState
 import at.mentor.bouldclockapp.presentation.theme.BouldClockAppTheme
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -24,12 +25,15 @@ import kotlin.math.roundToInt
  * Datengucken versehentlich einen Versuch startet, verliert mehr als er gewinnt.
  *
  * Werte, die noch nicht vorliegen, stehen als Strich da. Eine Null waere eine
- * Behauptung - der Puls ist nicht null, er ist unbekannt, etwa wenn die Uhr
- * keinen Hautkontakt hat.
+ * Behauptung - der Puls ist nicht null, er ist unbekannt.
+ *
+ * Beim Puls steht statt des Strichs, *warum* er fehlt. "Kein Hautkontakt" und
+ * "misst..." sehen sonst gleich aus, obwohl nur eines von selbst vorbeigeht.
  */
 @Composable
 fun LiveMetricsScreen(
     bpm: Int?,
+    heartRate: HeartRateState,
     kcal: Double?,
     climbHeightMeters: Double?,
     attemptCount: Int,
@@ -48,7 +52,7 @@ fun LiveMetricsScreen(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Puls",
+            text = if (bpm != null) "Puls" else heartRateHint(heartRate),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -57,6 +61,13 @@ fun LiveMetricsScreen(
         LiveRow("Höhe", climbHeightMeters?.let { String.format(Locale.GERMAN, "%.1f m", it) })
         LiveRow("Versuche", attemptCount.toString())
     }
+}
+
+private fun heartRateHint(state: HeartRateState): String = when (state) {
+    HeartRateState.STARTING -> "Puls misst…"
+    HeartRateState.MEASURING -> "Puls"
+    HeartRateState.OFF_BODY -> "Puls – kein Hautkontakt"
+    HeartRateState.UNAVAILABLE -> "Puls nicht verfügbar"
 }
 
 @Composable
@@ -85,6 +96,7 @@ private fun LiveMetricsPreview() {
     BouldClockAppTheme {
         LiveMetricsScreen(
             bpm = 142,
+            heartRate = HeartRateState.MEASURING,
             kcal = 218.0,
             climbHeightMeters = 27.4,
             attemptCount = 14,

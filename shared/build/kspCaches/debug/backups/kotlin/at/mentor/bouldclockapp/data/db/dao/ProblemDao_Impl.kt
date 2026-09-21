@@ -309,6 +309,86 @@ public class ProblemDao_Impl(
     }
   }
 
+  public override fun observeAll(): Flow<List<ProblemEntity>> {
+    val _sql: String = "SELECT * FROM problem WHERE deletedAt IS NULL ORDER BY gradeValue DESC, label COLLATE NOCASE"
+    return createFlow(__db, false, arrayOf("problem")) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _columnIndexOfId: Int = getColumnIndexOrThrow(_stmt, "id")
+        val _columnIndexOfGymId: Int = getColumnIndexOrThrow(_stmt, "gymId")
+        val _columnIndexOfLabel: Int = getColumnIndexOrThrow(_stmt, "label")
+        val _columnIndexOfColorHex: Int = getColumnIndexOrThrow(_stmt, "colorHex")
+        val _columnIndexOfGradeValue: Int = getColumnIndexOrThrow(_stmt, "gradeValue")
+        val _columnIndexOfWallAngle: Int = getColumnIndexOrThrow(_stmt, "wallAngle")
+        val _columnIndexOfFirstSentAt: Int = getColumnIndexOrThrow(_stmt, "firstSentAt")
+        val _columnIndexOfRetiredAt: Int = getColumnIndexOrThrow(_stmt, "retiredAt")
+        val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "createdAt")
+        val _columnIndexOfUpdatedAt: Int = getColumnIndexOrThrow(_stmt, "updatedAt")
+        val _columnIndexOfDeletedAt: Int = getColumnIndexOrThrow(_stmt, "deletedAt")
+        val _columnIndexOfSyncState: Int = getColumnIndexOrThrow(_stmt, "syncState")
+        val _result: MutableList<ProblemEntity> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: ProblemEntity
+          val _tmpId: String
+          _tmpId = _stmt.getText(_columnIndexOfId)
+          val _tmpGymId: String
+          _tmpGymId = _stmt.getText(_columnIndexOfGymId)
+          val _tmpLabel: String
+          _tmpLabel = _stmt.getText(_columnIndexOfLabel)
+          val _tmpColorHex: String?
+          if (_stmt.isNull(_columnIndexOfColorHex)) {
+            _tmpColorHex = null
+          } else {
+            _tmpColorHex = _stmt.getText(_columnIndexOfColorHex)
+          }
+          val _tmpGradeValue: Int?
+          if (_stmt.isNull(_columnIndexOfGradeValue)) {
+            _tmpGradeValue = null
+          } else {
+            _tmpGradeValue = _stmt.getLong(_columnIndexOfGradeValue).toInt()
+          }
+          val _tmpWallAngle: WallAngle?
+          if (_stmt.isNull(_columnIndexOfWallAngle)) {
+            _tmpWallAngle = null
+          } else {
+            _tmpWallAngle = __WallAngle_stringToEnum(_stmt.getText(_columnIndexOfWallAngle))
+          }
+          val _tmpFirstSentAt: Long?
+          if (_stmt.isNull(_columnIndexOfFirstSentAt)) {
+            _tmpFirstSentAt = null
+          } else {
+            _tmpFirstSentAt = _stmt.getLong(_columnIndexOfFirstSentAt)
+          }
+          val _tmpRetiredAt: Long?
+          if (_stmt.isNull(_columnIndexOfRetiredAt)) {
+            _tmpRetiredAt = null
+          } else {
+            _tmpRetiredAt = _stmt.getLong(_columnIndexOfRetiredAt)
+          }
+          val _tmpMeta: RecordMeta
+          val _tmpCreatedAt: Long
+          _tmpCreatedAt = _stmt.getLong(_columnIndexOfCreatedAt)
+          val _tmpUpdatedAt: Long
+          _tmpUpdatedAt = _stmt.getLong(_columnIndexOfUpdatedAt)
+          val _tmpDeletedAt: Long?
+          if (_stmt.isNull(_columnIndexOfDeletedAt)) {
+            _tmpDeletedAt = null
+          } else {
+            _tmpDeletedAt = _stmt.getLong(_columnIndexOfDeletedAt)
+          }
+          val _tmpSyncState: SyncState
+          _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
+          _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
+          _item = ProblemEntity(_tmpId,_tmpGymId,_tmpLabel,_tmpColorHex,_tmpGradeValue,_tmpWallAngle,_tmpFirstSentAt,_tmpRetiredAt,_tmpMeta)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override fun observeOpenProjects(): Flow<List<ProblemEntity>> {
     val _sql: String = """
         |

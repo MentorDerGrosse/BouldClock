@@ -704,6 +704,50 @@ public class SessionDao_Impl(
     }
   }
 
+  public override suspend fun softDelete(id: String, now: Long) {
+    val _sql: String = "UPDATE session SET deletedAt = ?, updatedAt = ?, syncState = 'PENDING' WHERE id = ?"
+    return performSuspending(__db, false, true) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        _stmt.bindLong(_argIndex, now)
+        _argIndex = 2
+        _stmt.bindLong(_argIndex, now)
+        _argIndex = 3
+        _stmt.bindText(_argIndex, id)
+        _stmt.step()
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
+  public override suspend fun setGym(
+    id: String,
+    gymId: String?,
+    now: Long,
+  ) {
+    val _sql: String = "UPDATE session SET gymId = ?, updatedAt = ?, syncState = 'PENDING' WHERE id = ?"
+    return performSuspending(__db, false, true) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        if (gymId == null) {
+          _stmt.bindNull(_argIndex)
+        } else {
+          _stmt.bindText(_argIndex, gymId)
+        }
+        _argIndex = 2
+        _stmt.bindLong(_argIndex, now)
+        _argIndex = 3
+        _stmt.bindText(_argIndex, id)
+        _stmt.step()
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   private fun __SessionType_enumToString(_value: SessionType): String = when (_value) {
     SessionType.FREE -> "FREE"
     SessionType.VOLUME -> "VOLUME"

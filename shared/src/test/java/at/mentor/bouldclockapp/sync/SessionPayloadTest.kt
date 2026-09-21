@@ -225,3 +225,97 @@ class ArrivedSensorFileTest {
         assertNull(SensorChunkEntity.fromArrivedFile("GYROSCOPE.bcs", 1L))
     }
 }
+
+/**
+ * Halle und Boulder muessen mitfahren.
+ *
+ * Sonst weist der Fremdschluessel auf der Gegenseite das ganze Paket ab: eine
+ * Versuchszeile mit unbekannter `problemId` laesst SQLite nicht einfuegen, und
+ * die Session faellt komplett durch. Am Geraet beobachtet, als am Handy der
+ * erste Boulder benannt wurde.
+ */
+class PayloadReferencesTest {
+
+    private val start = 1_758_000_000_000L
+
+    private val gym = at.mentor.bouldclockapp.data.db.entity.GymEntity(
+        id = "g1",
+        name = "Kletterhalle Wien",
+        gradeSystem = GradeSystem.FONT,
+        isDefault = true,
+        meta = RecordMeta(createdAt = start, updatedAt = start),
+    )
+
+    private val problem = at.mentor.bouldclockapp.data.db.entity.ProblemEntity(
+        id = "p1",
+        gymId = "g1",
+        label = "Blau 14",
+        gradeValue = 11,
+        meta = RecordMeta(createdAt = start, updatedAt = start),
+    )
+
+    private fun payloadWith(problemId: String?) = SessionPayload(
+        session = SessionEntity(
+            id = "s1",
+            gymId = "g1",
+            type = SessionType.FREE,
+            state = SessionState.FINISHED,
+            startedAt = start,
+            endedAt = start + 1000,
+            restTargetMs = 180_000L,
+            meta = RecordMeta(createdAt = start, updatedAt = start),
+        ),
+        attempts = listOf(
+            AttemptEntity(
+                id = "a1",
+                sessionId = "s1",
+                problemId = problemId,
+                ordinal = 1,
+                startedAt = start,
+                endedAt = start + 100,
+                meta = RecordMeta(createdAt = start, updatedAt = start),
+            ),
+        ),
+        hrSamples = emptyList(),
+        metricSamples = emptyList(),
+        gyms = listOf(gym),
+        problems = listOf(problem),
+    )
+
+    @Test
+    fun `Halle und Boulder ueberstehen die Uebertragung`() {
+        val restored = SessionPayload.fromJson(payloadWith("p1").toJson())
+
+        assertEquals(1, restored.gyms.size)
+        assertEquals("Kletterhalle Wien", restored.gyms.single().name)
+        assertTrue(restored.gyms.single().isDefault)
+
+        assertEquals(1, restored.problems.size)
+        assertEquals("Blau 14", restored.problems.single().label)
+        assertEquals("g1", restored.problems.single().gymId)
+        assertEquals(11, restored.problems.single().gradeValue)
+
+        assertEquals("p1", restored.attempts.single().problemId)
+        assertEquals("g1", restored.session.gymId)
+    }
+
+    /**
+     * Ein Paket von einer aelteren Fassung kennt die Felder nicht. Es muss
+     * trotzdem ankommen - sonst bricht die Synchronisierung, sobald nur ein
+     * Geraet aktualisiert wurde.
+     */
+    @Test
+    fun `altes Paket ohne Halle und Boulder bleibt lesbar`() {
+        val old = JSONObject(payloadWith(null).toJson()).apply {
+            remove("gyms")
+            remove("problems")
+        }.toString()
+
+        val restored = SessionPayload.fromJson(old)
+
+        assertTrue(restored.gyms.isEmpty())
+        assertTrue(restored.problems.isEmpty())
+        assertEquals("s1", restored.session.id)
+        assertEquals(1, restored.attempts.size)
+    }
+}

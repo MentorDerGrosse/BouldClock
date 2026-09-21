@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.AttemptRunsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:18:27.116Z" hostname="fedora" time="0.021">
+<testsuite name="at.mentor.bouldclockapp.core.AttemptRunsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-21T15:16:00.466Z" hostname="fedora" time="0.022">
   <properties/>
-  <testcase name="Versuche zwischen zwei Grenzen sind ein Boulder" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.015"/>
+  <testcase name="Versuche zwischen zwei Grenzen sind ein Boulder" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.016"/>
   <testcase name="ohne Versuche gibt es keine Gruppen" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.0"/>
   <testcase name="ohne Grade traegt allein die Grenze" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.0"/>
   <testcase name="zwei Boulder mit gleichem Grad bleiben getrennt" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.0"/>

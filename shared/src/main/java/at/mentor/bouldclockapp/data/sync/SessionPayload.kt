@@ -7,7 +7,10 @@ import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.model.SyncState
+import at.mentor.bouldclockapp.core.model.WallAngle
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
+import at.mentor.bouldclockapp.data.db.entity.GymEntity
+import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
@@ -43,6 +46,20 @@ data class SessionPayload(
      * der Dateien noch laeuft.
      */
     val sensorChunks: List<SensorChunkEntity> = emptyList(),
+
+    /**
+     * Halle und Boulder, auf die diese Session zeigt.
+     *
+     * Muessen mit, weil beides Fremdschluessel sind: eine Versuchszeile mit
+     * einer `problemId`, die die Gegenstelle nicht kennt, laesst sich dort
+     * nicht einfuegen - SQLite weist sie ab, und damit faellt das **ganze
+     * Paket** durch, nicht nur die Zuordnung. Genau das ist passiert, als am
+     * Handy der erste Boulder benannt wurde.
+     *
+     * Nur die tatsaechlich verwendeten Zeilen, nicht der ganze Bestand.
+     */
+    val gyms: List<GymEntity> = emptyList(),
+    val problems: List<ProblemEntity> = emptyList(),
 ) {
 
     fun toJson(): String = JSONObject().apply {
@@ -55,6 +72,8 @@ data class SessionPayload(
             JSONArray(metricSamples.map { JSONArray(listOf(it.metric.name, it.timestampMs, it.value)) }),
         )
         put(KEY_CHUNKS, JSONArray(sensorChunks.map { it.toJson() }))
+        put(KEY_GYMS, JSONArray(gyms.map { it.toJson() }))
+        put(KEY_PROBLEMS, JSONArray(problems.map { it.toJson() }))
     }.toString()
 
     companion object {
@@ -66,6 +85,8 @@ data class SessionPayload(
         private const val KEY_HR = "hr"
         private const val KEY_METRICS = "metrics"
         private const val KEY_CHUNKS = "chunks"
+        private const val KEY_GYMS = "gyms"
+        private const val KEY_PROBLEMS = "problems"
 
         /**
          * Liest ein Paket. Wirft nur, wenn nicht einmal die Session lesbar ist -
@@ -98,7 +119,18 @@ data class SessionPayload(
                 runCatching { obj.toSensorChunk(session.id) }.getOrNull()
             }
 
-            return SessionPayload(session, attempts, hrSamples, metricSamples, sensorChunks)
+            val gyms = root.optJSONArray(KEY_GYMS).objects().map { it.toGym() }
+            val problems = root.optJSONArray(KEY_PROBLEMS).objects().map { it.toProblem() }
+
+            return SessionPayload(
+                session = session,
+                attempts = attempts,
+                hrSamples = hrSamples,
+                metricSamples = metricSamples,
+                sensorChunks = sensorChunks,
+                gyms = gyms,
+                problems = problems,
+            )
         }
     }
 }
@@ -205,6 +237,50 @@ private fun JSONObject.toSensorChunk(sessionId: String) = SensorChunkEntity(
     sizeBytes = optLong("sizeBytes", 0L),
     // Auf der Empfaengerseite heisst PENDING: Datei noch nicht da.
     syncState = at.mentor.bouldclockapp.core.model.SyncState.PENDING,
+)
+
+private fun GymEntity.toJson() = JSONObject().apply {
+    put("id", id)
+    put("name", name)
+    put("gradeSystem", gradeSystem.name)
+    put("isDefault", isDefault)
+    putMeta(meta)
+}
+
+private fun JSONObject.toGym() = GymEntity(
+    id = getString("id"),
+    name = optString("name"),
+    gradeSystem = optStringOrNull("gradeSystem")?.let { name ->
+        GradeSystem.entries.firstOrNull { it.name == name }
+    } ?: GradeSystem.FONT,
+    isDefault = optBoolean("isDefault", false),
+    meta = readMeta(),
+)
+
+private fun ProblemEntity.toJson() = JSONObject().apply {
+    put("id", id)
+    put("gymId", gymId)
+    put("label", label)
+    putOpt("colorHex", colorHex)
+    putOpt("gradeValue", gradeValue)
+    putOpt("wallAngle", wallAngle?.name)
+    putOpt("firstSentAt", firstSentAt)
+    putOpt("retiredAt", retiredAt)
+    putMeta(meta)
+}
+
+private fun JSONObject.toProblem() = ProblemEntity(
+    id = getString("id"),
+    gymId = getString("gymId"),
+    label = optString("label"),
+    colorHex = optStringOrNull("colorHex"),
+    gradeValue = optIntOrNull("gradeValue"),
+    wallAngle = optStringOrNull("wallAngle")?.let { name ->
+        WallAngle.entries.firstOrNull { it.name == name }
+    },
+    firstSentAt = optLongOrNull("firstSentAt"),
+    retiredAt = optLongOrNull("retiredAt"),
+    meta = readMeta(),
 )
 
 private fun JSONObject.putMeta(meta: RecordMeta) {

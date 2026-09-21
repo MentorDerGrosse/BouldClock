@@ -76,6 +76,21 @@ interface SessionDao {
     suspend fun pendingSync(): List<SessionEntity>
 
     /**
+     * Weich loeschen.
+     *
+     * Weich und nicht hart, damit die Loeschung bei der Uhr ankommt: eine
+     * entfernte Zeile laesst sich nicht uebertragen, ein gesetztes `deletedAt`
+     * schon. Die Zusammenfassung wird dabei entfernt - siehe
+     * SessionSummaryDao.deleteForSession; daran haengen saemtliche Summen.
+     */
+    @Query("UPDATE session SET deletedAt = :now, updatedAt = :now, syncState = 'PENDING' WHERE id = :id")
+    suspend fun softDelete(id: String, now: Long)
+
+    /** Zuordnung zu einer Halle, nachtraeglich am Handy. */
+    @Query("UPDATE session SET gymId = :gymId, updatedAt = :now, syncState = 'PENDING' WHERE id = :id")
+    suspend fun setGym(id: String, gymId: String?, now: Long)
+
+    /**
      * Die letzte vergleichbare Session: gleicher Typ, gleiche Halle. Basis fuer
      * das Delta in der Zusammenfassung.
      */

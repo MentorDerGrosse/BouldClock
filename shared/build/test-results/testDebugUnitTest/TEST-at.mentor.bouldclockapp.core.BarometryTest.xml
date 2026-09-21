@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.BarometryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:18:27.139Z" hostname="fedora" time="0.003">
+<testsuite name="at.mentor.bouldclockapp.core.BarometryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-21T15:16:00.490Z" hostname="fedora" time="0.003">
   <properties/>
-  <testcase name="Rauschen allein ergibt keine Hoehe" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.002"/>
-  <testcase name="die Umrechnung entspricht der Faustregel" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.0"/>
+  <testcase name="Rauschen allein ergibt keine Hoehe" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.001"/>
+  <testcase name="die Umrechnung entspricht der Faustregel" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.001"/>
   <testcase name="zu wenige Messpunkte ergeben keine Hoehe" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.0"/>
   <testcase name="ein einzelner Ausreisser verfaelscht die Hoehe kaum" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.0"/>
   <testcase name="ein vier Meter hoher Boulder wird erkannt" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.0"/>
-  <testcase name="ein hoher Boulder wird ebenso erkannt" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.001"/>
-  <testcase name="unplausible Spruenge werden verworfen" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.0"/>
+  <testcase name="ein hoher Boulder wird ebenso erkannt" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.0"/>
+  <testcase name="unplausible Spruenge werden verworfen" classname="at.mentor.bouldclockapp.core.BarometryTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

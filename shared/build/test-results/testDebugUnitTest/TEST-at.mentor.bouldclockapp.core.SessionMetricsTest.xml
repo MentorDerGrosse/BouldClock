@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.SessionMetricsTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:18:27.158Z" hostname="fedora" time="0.001">
+<testsuite name="at.mentor.bouldclockapp.core.SessionMetricsTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-21T15:16:00.540Z" hostname="fedora" time="0.001">
   <properties/>
-  <testcase name="hrr60 ist die Differenz ueber das Fenster" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.0"/>
+  <testcase name="hrr60 ist die Differenz ueber das Fenster" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.001"/>
   <testcase name="hrr60 gilt nicht wenn der naechste Versuch zu frueh startet" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.0"/>
   <testcase name="hrr60 gilt bei offener Pause ohne Folgeversuch" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.0"/>
-  <testcase name="timeSplit erzeugt keine negativen Dauern" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.001"/>
+  <testcase name="timeSplit erzeugt keine negativen Dauern" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.0"/>
   <testcase name="timeSplit rechnet die Pausenzeit als Rest" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.0"/>
   <testcase name="hrr60 ohne Pulswerte ist null" classname="at.mentor.bouldclockapp.core.SessionMetricsTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

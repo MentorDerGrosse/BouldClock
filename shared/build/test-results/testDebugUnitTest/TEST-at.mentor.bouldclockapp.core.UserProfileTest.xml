@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.UserProfileTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-21T00:18:27.160Z" hostname="fedora" time="0.006">
+<testsuite name="at.mentor.bouldclockapp.core.UserProfileTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-21T15:16:00.543Z" hostname="fedora" time="0.005">
   <properties/>
   <testcase name="das Alter altert von selbst mit" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.001"/>
   <testcase name="es gibt genau ein Profil" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.0"/>

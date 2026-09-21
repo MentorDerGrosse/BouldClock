@@ -156,6 +156,8 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                                     )
                                 } else {
                                     val bpm by viewModel.liveBpm.collectAsStateWithLifecycle()
+                                    val hrState by viewModel.liveHeartRateState
+                                        .collectAsStateWithLifecycle()
                                     val kcal by viewModel.liveKcal.collectAsStateWithLifecycle()
                                     val height by viewModel.liveClimbHeightMeters
                                         .collectAsStateWithLifecycle()
@@ -163,6 +165,7 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                                         .collectAsStateWithLifecycle()
                                     LiveMetricsScreen(
                                         bpm = bpm,
+                                        heartRate = hrState,
                                         kcal = kcal,
                                         climbHeightMeters = height,
                                         attemptCount = attempts,

@@ -34,6 +34,9 @@ class SessionRecordingService : LifecycleService() {
             context = applicationContext,
             hrSampleDao = database.hrSampleDao(),
             metricSampleDao = database.metricSampleDao(),
+            // Anzeigen, sobald die Uhr etwas meldet - nicht erst beim naechsten
+            // Wegschreiben. Der Takt der Schleife unten gehoert der Datenbank.
+            onLive = ::publishLive,
         )
     }
 
@@ -64,13 +67,18 @@ class SessionRecordingService : LifecycleService() {
                 delay(FLUSH_INTERVAL_MS)
                 rawRecorder.flush()
                 exerciseRecorder.flush()
-                LiveMetrics.update(
-                    bpm = exerciseRecorder.latestBpm,
-                    kcal = exerciseRecorder.latestKcal,
-                    elevationGainMeters = exerciseRecorder.latestElevationGain,
-                )
             }
         }
+    }
+
+    /** Traegt den aktuellen Stand in die Anzeige. Laeuft im Rueckruf der Uhr. */
+    private fun publishLive() {
+        LiveMetrics.update(
+            bpm = exerciseRecorder.latestBpm,
+            heartRate = exerciseRecorder.heartRateState,
+            kcal = exerciseRecorder.latestKcal,
+            elevationGainMeters = exerciseRecorder.latestElevationGain,
+        )
     }
 
     private fun endRecording() {

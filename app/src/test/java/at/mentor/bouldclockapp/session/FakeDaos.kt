@@ -9,6 +9,8 @@ import at.mentor.bouldclockapp.data.db.dao.AttemptDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
 import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
+import at.mentor.bouldclockapp.data.db.dao.GradeBucket
+import at.mentor.bouldclockapp.data.db.dao.ProblemTally
 import at.mentor.bouldclockapp.data.db.dao.SessionBaseline
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
@@ -68,6 +70,14 @@ class FakeSessionDao : SessionDao {
         gymId: String?,
         before: Long,
     ): SessionEntity? = null
+
+    override suspend fun softDelete(id: String, now: Long) {
+        sessions[id]?.let { sessions[id] = it.copy(meta = it.meta.copy(deletedAt = now, updatedAt = now)) }
+    }
+
+    override suspend fun setGym(id: String, gymId: String?, now: Long) {
+        sessions[id]?.let { sessions[id] = it.copy(gymId = gymId, meta = it.meta.touched(now)) }
+    }
 }
 
 class FakeAttemptDao : AttemptDao {
@@ -145,6 +155,16 @@ class FakeAttemptDao : AttemptDao {
             maxClimbHeightMeters = done.mapNotNull { it.climbHeightMeters }.maxOrNull(),
         )
     }
+
+    override fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>> = flowOf(emptyList())
+
+    override suspend fun setProblem(attemptId: String, problemId: String?, now: Long) {
+        attempts[attemptId]?.let {
+            attempts[attemptId] = it.copy(problemId = problemId, meta = it.meta.touched(now))
+        }
+    }
+
+    override fun observeProblemTallies(): Flow<List<ProblemTally>> = flowOf(emptyList())
 }
 
 /** Liefert Pulswerte aus einer vorgegebenen Kurve. */
@@ -229,4 +249,10 @@ class FakeSummaryDao : SessionSummaryDao {
     ): SessionBaseline = SessionBaseline(0, null, null, null, null, null, null)
 
     override fun observeHrr60Trend(since: Long): Flow<List<Hrr60Point>> = flowOf(emptyList())
+
+    override fun observeAll(): Flow<List<SessionSummaryEntity>> = flowOf(summaries.values.toList())
+
+    override suspend fun deleteForSession(sessionId: String) {
+        summaries.remove(sessionId)
+    }
 }

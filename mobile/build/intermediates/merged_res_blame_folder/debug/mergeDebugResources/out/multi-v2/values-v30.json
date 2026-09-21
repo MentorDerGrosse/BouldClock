@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "at.mentor.bouldclockapp.mobile-mergeDebugResources-36:/values-v30/values-v30.xml",
+            "outputFile": "at.mentor.bouldclockapp.mobile-mergeDebugResources-37:/values-v30/values-v30.xml",
             "map": [
                 {
-                    "source": "/home/thomas/.gradle/caches/9.6.0/transforms/d2c6a214127de7a799ce9d2d992a3736/transformed/material3/res/values-v30/values-v30.xml",
+                    "source": "/home/thomas/.gradle/caches/9.6.0/transforms/e2f03b2020ce2347aace302f5a0f6f3c/transformed/material3/res/values-v30/values-v30.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

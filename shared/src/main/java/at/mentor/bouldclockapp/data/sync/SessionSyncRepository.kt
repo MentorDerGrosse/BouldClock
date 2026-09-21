@@ -28,12 +28,23 @@ class SessionSyncRepository(
 
     suspend fun buildPayload(sessionId: String): SessionPayload? {
         val session = db.sessionDao().byId(sessionId) ?: return null
+        val attempts = db.attemptDao().allBySession(sessionId)
+
+        // Halle und Boulder muessen mit, sonst weist der Fremdschluessel auf
+        // der Gegenseite das ganze Paket ab. Nur die verwendeten Zeilen.
+        val problems = attempts.mapNotNull { it.problemId }.distinct()
+            .mapNotNull { db.problemDao().byId(it) }
+        val gymIds = (problems.map { it.gymId } + listOfNotNull(session.gymId)).distinct()
+        val gyms = gymIds.mapNotNull { db.gymDao().byId(it) }
+
         return SessionPayload(
             session = session,
-            attempts = db.attemptDao().allBySession(sessionId),
+            attempts = attempts,
             hrSamples = db.hrSampleDao().bySession(sessionId),
             metricSamples = db.metricSampleDao().bySession(sessionId),
             sensorChunks = db.sensorChunkDao().bySession(sessionId),
+            gyms = gyms,
+            problems = problems,
         )
     }
 
@@ -51,8 +62,24 @@ class SessionSyncRepository(
         // Das juengere gewinnt - dieselbe Regel wie beim Profil.
         if (existing != null && existing.meta.updatedAt > payload.session.meta.updatedAt) return
 
+        // Reihenfolge nach Fremdschluesseln: Halle vor Session und Boulder,
+        // Boulder vor Versuch. Andersherum weist SQLite das ganze Paket ab.
+        payload.gyms.forEach { db.gymDao().upsert(it) }
         db.sessionDao().upsert(payload.session)
-        payload.attempts.forEach { db.attemptDao().upsert(it) }
+        payload.problems.forEach { db.problemDao().upsert(it) }
+
+        // Zeigt ein Versuch trotzdem auf einen unbekannten Boulder - etwa weil
+        // die Gegenstelle noch eine aeltere Fassung hat - dann lieber die
+        // Zuordnung fallen lassen als die ganze Session.
+        val knownProblems = payload.problems.map { it.id }.toSet()
+        payload.attempts.forEach { attempt ->
+            val resolvable = attempt.problemId == null ||
+                attempt.problemId in knownProblems ||
+                db.problemDao().byId(attempt.problemId) != null
+            db.attemptDao().upsert(
+                if (resolvable) attempt else attempt.copy(problemId = null),
+            )
+        }
         db.hrSampleDao().insertAll(payload.hrSamples)
         db.metricSampleDao().insertAll(payload.metricSamples)
 
@@ -92,6 +119,15 @@ class SessionSyncRepository(
     }
 
     private suspend fun recomputeSummary(session: SessionEntity) {
+        // Eine geloeschte Session hat keine Zusammenfassung mehr. Das ist nicht
+        // Kosmetik: saemtliche Summen - Hoehenmeter, Diagramme, Historie -
+        // lesen aus session_summary. Bleibt die Zeile stehen, zaehlt der
+        // geloeschte Abend ueberall weiter mit.
+        if (session.meta.deletedAt != null) {
+            db.sessionSummaryDao().deleteForSession(session.id)
+            return
+        }
+
         val endedAt = session.endedAt ?: return
         db.sessionSummaryDao().upsert(
             buildSessionSummary(

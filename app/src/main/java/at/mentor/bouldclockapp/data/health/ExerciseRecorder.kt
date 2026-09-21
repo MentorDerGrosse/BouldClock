@@ -7,6 +7,7 @@ import androidx.health.services.client.HealthServices
 import androidx.health.services.client.data.Availability
 import androidx.health.services.client.data.CumulativeDataPoint
 import androidx.health.services.client.data.DataType
+import androidx.health.services.client.data.DataTypeAvailability
 import androidx.health.services.client.data.ExerciseConfig
 import androidx.health.services.client.data.ExerciseLapSummary
 import androidx.health.services.client.data.ExerciseType
@@ -41,6 +42,16 @@ class ExerciseRecorder(
     private val context: Context,
     private val hrSampleDao: HrSampleDao,
     private val metricSampleDao: MetricSampleDao,
+
+    /**
+     * Wird bei jeder Meldung der Uhr aufgerufen, also etwa sekuendlich.
+     *
+     * Getrennt vom Wegschreiben: in die Datenbank gehen die Werte gebuendelt
+     * alle zehn Sekunden, angezeigt werden muessen sie sofort. Frueher hing
+     * beides am selben Takt, und der Puls auf der Uhr sprang nur alle zehn
+     * Sekunden - beim Start dauerte der erste Wert entsprechend lang.
+     */
+    private val onLive: () -> Unit = {},
 ) {
 
     private val exerciseClient = HealthServices.getClient(context).exerciseClient
@@ -65,6 +76,11 @@ class ExerciseRecorder(
     /** Letzter brauchbarer Pulswert - fuer die Live-Anzeige. */
     @Volatile
     var latestBpm: Int? = null
+        private set
+
+    /** Warum gerade kein Puls dasteht - fuer die Live-Anzeige. */
+    @Volatile
+    var heartRateState: HeartRateState = HeartRateState.STARTING
         private set
 
     /**
@@ -122,6 +138,19 @@ class ExerciseRecorder(
         override fun onLapSummaryReceived(lapSummary: ExerciseLapSummary) = Unit
         override fun onAvailabilityChanged(dataType: DataType<*, *>, availability: Availability) {
             Diagnostics.log(context, TAG, "Verfuegbarkeit $dataType -> $availability")
+            if (dataType != DataType.HEART_RATE_BPM) return
+
+            heartRateState = when (availability) {
+                DataTypeAvailability.AVAILABLE -> HeartRateState.MEASURING
+                DataTypeAvailability.ACQUIRING -> HeartRateState.STARTING
+                DataTypeAvailability.UNAVAILABLE_DEVICE_OFF_BODY -> HeartRateState.OFF_BODY
+                DataTypeAvailability.UNAVAILABLE -> HeartRateState.UNAVAILABLE
+                // UNKNOWN und alles Neue: nichts behaupten, beim Alten bleiben.
+                else -> heartRateState
+            }
+            // Ohne Hautkontakt ist der letzte Wert nur noch eine Erinnerung.
+            if (heartRateState != HeartRateState.MEASURING) latestBpm = null
+            onLive()
         }
 
         override fun onExerciseUpdateReceived(update: ExerciseUpdate) {
@@ -130,7 +159,10 @@ class ExerciseRecorder(
             val heartRates = metrics.getData(DataType.HEART_RATE_BPM).map { point ->
                 val status = (point.accuracy as? HeartRateAccuracy)?.sensorStatus?.id ?: 0
                 val bpm = point.value.roundToInt()
-                if (status >= USABLE_ACCURACY) latestBpm = bpm
+                if (status >= USABLE_ACCURACY) {
+                    latestBpm = bpm
+                    heartRateState = HeartRateState.MEASURING
+                }
                 HrSampleEntity(
                     sessionId = sessionId,
                     timestampMs = point.getTimeInstant(bootAt).toEpochMilli(),
@@ -151,6 +183,9 @@ class ExerciseRecorder(
                 pendingHr += heartRates
                 pendingMetrics += listOfNotNull(calories, elevation)
             }
+
+            // Anzeigen, sobald es da ist. Geschrieben wird weiterhin gebuendelt.
+            onLive()
         }
     }
 
@@ -177,6 +212,7 @@ class ExerciseRecorder(
         latestBpm = null
         latestKcal = null
         latestElevationGain = null
+        heartRateState = HeartRateState.STARTING
     }
 
     private fun CumulativeDataPoint<Double>.toSample(
