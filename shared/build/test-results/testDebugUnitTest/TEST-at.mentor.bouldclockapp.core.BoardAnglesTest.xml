@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.BoardAnglesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:43:12.262Z" hostname="fedora" time="0.002">
+<testsuite name="at.mentor.bouldclockapp.core.BoardAnglesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.465Z" hostname="fedora" time="0.003">
   <properties/>
   <testcase name="der Verstellbereich deckt das Kilterboard ab" classname="at.mentor.bouldclockapp.core.BoardAnglesTest" time="0.001"/>
   <testcase name="krumme Winkel rasten auf den naechsten Fuenferschritt ein" classname="at.mentor.bouldclockapp.core.BoardAnglesTest" time="0.0"/>
-  <testcase name="der Index bleibt im Bereich" classname="at.mentor.bouldclockapp.core.BoardAnglesTest" time="0.001"/>
+  <testcase name="der Index bleibt im Bereich" classname="at.mentor.bouldclockapp.core.BoardAnglesTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

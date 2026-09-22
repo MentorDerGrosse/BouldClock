@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="at.mentor.bouldclockapp.core.HeartRateZonesTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.498Z" hostname="fedora" time="0.004">
+  <properties/>
+  <testcase name="ohne sinnvolle Spanne faellt alles in Ruhe" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.001"/>
+  <testcase name="die Grenze in Schlaegen laesst sich beschriften" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.0"/>
+  <testcase name="Zeit wird gemessen, nicht gezaehlt" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.002"/>
+  <testcase name="Zonen folgen der Pulsreserve" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.0"/>
+  <testcase name="Luecken werden gekappt" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

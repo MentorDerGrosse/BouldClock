@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.GradesTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:43:12.276Z" hostname="fedora" time="0.002">
+<testsuite name="at.mentor.bouldclockapp.core.GradesTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.492Z" hostname="fedora" time="0.004">
   <properties/>
   <testcase name="Hallenfarben fallen auf Font zurueck statt zu knallen" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
   <testcase name="clamp haelt Werte auf der Leiter" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
   <testcase name="alle Skalen beschriften dieselbe Leiter" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.001"/>
-  <testcase name="die Leiter reicht vom Einstieg bis zum haertesten Boulder" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
+  <testcase name="die Leiter reicht vom Einstieg bis zum haertesten Boulder" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.001"/>
   <testcase name="Font und V beschreiben dieselbe Stufe" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
   <testcase name="Routengrade gehoeren nicht auf die Boulderleiter" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
   <testcase name="Kleinschreibung wird gelesen" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
-  <testcase name="der Drehkranz zeigt in der V-Skala keine Dopplungen" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.001"/>
+  <testcase name="der Drehkranz zeigt in der V-Skala keine Dopplungen" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
   <testcase name="Grade sind sortierbar" classname="at.mentor.bouldclockapp.core.GradesTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

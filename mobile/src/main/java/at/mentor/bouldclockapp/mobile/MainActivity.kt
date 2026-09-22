@@ -150,8 +150,10 @@ private fun BouldClockApp() {
                 when (destination) {
                     Destination.DASHBOARD -> {
                         val state by viewModel.dashboard.collectAsStateWithLifecycle()
+                        val readiness by viewModel.readiness.collectAsStateWithLifecycle()
                         DashboardScreen(
                             state = state,
+                            readiness = readiness,
                             onOpenSession = ::open,
                             onOpenHistory = { go(Destination.HISTORY) },
                             modifier = Modifier.padding(padding),
@@ -163,11 +165,15 @@ private fun BouldClockApp() {
                         val buckets by viewModel.historyBuckets.collectAsStateWithLifecycle()
                         val grades by viewModel.gradeHistogram.collectAsStateWithLifecycle()
                         val hrr60 by viewModel.hrr60Trend.collectAsStateWithLifecycle()
+                        val zones by viewModel.periodZones.collectAsStateWithLifecycle()
+                        val totals by viewModel.periodTotals.collectAsStateWithLifecycle()
                         HistoryScreen(
                             period = period,
                             buckets = buckets,
                             grades = grades,
                             hrr60 = hrr60,
+                            zones = zones,
+                            totals = totals,
                             onSelectPeriod = viewModel::selectPeriod,
                             modifier = Modifier.padding(padding),
                         )

@@ -76,6 +76,8 @@ fun ColumnChart(
     selectedIndex: Int? = null,
     onSelect: (Int?) -> Unit = {},
     valueFormat: (Double) -> String = { it.toInt().toString() },
+    /** Beschriftung des hervorgehobenen Anteils, wenn es einen gibt. */
+    highlightFormat: ((Double) -> String)? = null,
     emptyHint: String = "Für diesen Zeitraum noch nichts gemessen.",
 ) {
     if (bars.isEmpty()) return
@@ -173,11 +175,18 @@ fun ColumnChart(
             }
         }
 
-        // Genau ein Wert im Klartext: der ausgewaehlte, sonst der hoechste.
+        // Der ausgewaehlte Balken im Klartext, mit **beiden** Reihen. Ohne das
+        // bleibt ein zweifarbiger Balken huebsch und unlesbar: man sieht, dass
+        // ein Teil Tops war, aber nicht wie viele.
         val shown = bars.getOrNull(selectedIndex ?: peakIndex)
         if (shown != null && shown.value > 0.0) {
             Text(
-                text = "${shown.label}: ${valueFormat(shown.value)}",
+                text = buildString {
+                    append(shown.label).append(": ").append(valueFormat(shown.value))
+                    if (highlightFormat != null && shown.highlight > 0.0) {
+                        append(" · ").append(highlightFormat(shown.highlight))
+                    }
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 8.dp),
@@ -238,13 +247,19 @@ fun GradePyramid(
                         }
                     }
                 }
+                // Beide Zahlen, nicht nur die Gesamtlaenge - sonst muss man den
+                // orangen Anteil schaetzen.
                 Text(
-                    text = bar.value.toInt().toString(),
+                    text = if (bar.highlight > 0.0) {
+                        "${bar.value.toInt()}/${bar.highlight.toInt()}"
+                    } else {
+                        bar.value.toInt().toString()
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.End,
                     maxLines = 1,
-                    modifier = Modifier.size(width = 36.dp, height = rowHeight)
+                    modifier = Modifier.size(width = 58.dp, height = rowHeight)
                         .padding(start = 8.dp, top = 4.dp),
                 )
             }
@@ -294,6 +309,67 @@ fun TrendLine(
         val last = pointAt(values.lastIndex)
         drawCircle(colors.surface, radius = 6.dp.toPx(), center = last)
         drawCircle(colors.series1, radius = 4.dp.toPx(), center = last)
+    }
+}
+
+/**
+ * Anteile einer geordneten Leiter als ein Balken, darunter die Zahlen.
+ *
+ * Fuer Pulszonen: die Form zeigt auf einen Blick, wie viel vom Abend wirklich
+ * hart war. Die Zahlen darunter sind kein Beiwerk - aus einem Balken allein
+ * liest niemand Minuten ab.
+ */
+@Composable
+fun StackedShareBar(
+    parts: List<Triple<String, Long, Color>>,
+    modifier: Modifier = Modifier,
+    valueFormat: (Long) -> String,
+) {
+    val total = parts.sumOf { it.second }
+    if (total <= 0L) return
+    val colors = LocalChartColors.current
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Canvas(modifier = Modifier.fillMaxWidth().height(18.dp)) {
+            var x = 0f
+            parts.forEach { (_, value, color) ->
+                if (value <= 0L) return@forEach
+                val width = size.width * value / total
+                drawRect(
+                    color = color,
+                    topLeft = Offset(x, 0f),
+                    size = androidx.compose.ui.geometry.Size(
+                        (width - BAR_GAP.toPx()).coerceAtLeast(1f),
+                        size.height,
+                    ),
+                )
+                x += width
+            }
+        }
+        parts.filter { it.second > 0L }.forEach { (label, value, color) ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = "${valueFormat(value)} · ${100 * value / total} %",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
     }
 }
 

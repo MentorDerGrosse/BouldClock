@@ -42,7 +42,12 @@ import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.mobile.BoulderRun
 import at.mentor.bouldclockapp.mobile.SessionDetail
+import at.mentor.bouldclockapp.mobile.formatBpm
+import at.mentor.bouldclockapp.mobile.formatBpmRange
 import at.mentor.bouldclockapp.mobile.formatDuration
+import at.mentor.bouldclockapp.mobile.formatDurationWithUnit
+import at.mentor.bouldclockapp.mobile.formatRecovery
+import at.mentor.bouldclockapp.mobile.ui.TrendLine
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.formatMeters
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
@@ -110,6 +115,28 @@ fun SessionDetailScreen(
     ) {
         item { StatsCard(detail.summary, attemptNumbers.size) }
 
+        if (detail.heartBeats.size >= 2) {
+            item { SectionHeader("Pulsverlauf", trailing = pulseRange(detail)) }
+            item {
+                BouldCard {
+                    // Ausgeduennt: dreitausend Punkte auf ein paar hundert Pixel
+                    // zu zeichnen kostet nur Rechenzeit und sieht gleich aus.
+                    val step = (detail.heartBeats.size / 240).coerceAtLeast(1)
+                    TrendLine(
+                        values = detail.heartBeats.filterIndexed { i, _ -> i % step == 0 }
+                            .map { it.bpm.toDouble() },
+                    )
+                    Text(
+                        text = "Über ${formatDurationWithUnit(detail.session.let { s ->
+                            (s.endedAt ?: s.startedAt) - s.startedAt
+                        })}, ${detail.heartBeats.size} Messwerte",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
         item { SectionHeader("Halle") }
         item { GymCard(detail.gym, gyms, actions.onGymChange) }
 
@@ -148,9 +175,14 @@ fun SessionDetailScreen(
                 )
             }
         } else {
-            visibleAttempts.forEach { attempt ->
+            visibleAttempts.forEachIndexed { index, attempt ->
                 item(key = attempt.id) {
-                    AttemptCard(attempt, attemptNumbers[attempt.id], actions)
+                    AttemptCard(attempt, attemptNumbers[attempt.id], detail.startBpm[attempt.id], actions)
+                }
+                // Die Pause bis zum naechsten Block, zwischen den Karten.
+                val rest = attempt.restAfterMs
+                if (rest != null && index < visibleAttempts.lastIndex) {
+                    item(key = "rest-${attempt.id}") { RestRow(rest) }
                 }
             }
         }
@@ -159,19 +191,46 @@ fun SessionDetailScreen(
     }
 }
 
+/** Die Pause zwischen zwei Versuchen - schmal, damit sie die Liste nicht dominiert. */
+@Composable
+private fun RestRow(restMs: Long) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp, horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "↓",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = "Pause ${formatDurationWithUnit(restMs)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun pulseRange(detail: SessionDetail): String {
+    val bpm = detail.heartBeats.map { it.bpm }
+    return formatBpmRange(bpm.min(), bpm.max())
+}
+
 @Composable
 private fun StatsCard(summary: SessionSummaryEntity?, attemptCount: Int) {
     BouldCard {
         StatRow("Versuche", attemptLabel(attemptCount))
         summary?.let {
             StatRow("Tops", "${it.sendCount} · ${it.flashCount} Flash")
-            StatRow("Dauer", formatDuration(it.totalMs))
-            StatRow("Wandzeit", formatDuration(it.workMs))
+            StatRow("Dauer", formatDurationWithUnit(it.totalMs))
+            StatRow("Wandzeit", formatDurationWithUnit(it.workMs))
+            StatRow("Pause", formatDurationWithUnit(it.restMs))
             it.sendRate?.let { rate -> StatRow("Erfolgsquote", "${(rate * 100).roundToInt()} %") }
             it.hrAvg?.let { avg ->
-                StatRow("Puls", it.hrMax?.let { max -> "$avg / $max" } ?: "$avg")
+                StatRow("Puls", it.hrMax?.let { max -> "$avg / $max bpm" } ?: formatBpm(avg))
             }
-            it.hrr60Avg?.let { hrr -> StatRow("Erholung 60 s", "−$hrr") }
+            it.hrr60Avg?.let { hrr -> StatRow("Erholung nach 60 s", formatRecovery(hrr)) }
             it.caloriesTotal?.let { kcal ->
                 StatRow(
                     label = "Kalorien",
@@ -400,6 +459,7 @@ private fun ProblemPickerDialog(
 private fun AttemptCard(
     attempt: AttemptEntity,
     number: Int?,
+    startBpm: Int?,
     actions: SessionDetailActions,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -457,9 +517,14 @@ private fun AttemptCard(
             return@BouldCard
         }
 
-        attempt.hrr60?.let { drop ->
-            StatRow("Erholung nach 60 s", "−$drop Schläge")
+        // Der Puls dieses Versuchs: womit du gestartet bist, was im Schnitt lief,
+        // wo die Spitze war. Der Startpuls sagt, ob du erholt warst.
+        startBpm?.let { StatRow("Puls beim Start", formatBpm(it)) }
+        attempt.hrAvg?.let { avg ->
+            StatRow("Puls", attempt.hrMax?.let { max -> "$avg / $max bpm" } ?: formatBpm(avg))
         }
+        attempt.hrr60?.let { drop -> StatRow("Erholung nach 60 s", formatRecovery(drop)) }
+        attempt.restAfterMs?.let { rest -> StatRow("Pause danach", formatDurationWithUnit(rest)) }
 
         Text("Ergebnis", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

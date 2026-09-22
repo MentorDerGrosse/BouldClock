@@ -11,6 +11,17 @@ enum class Period(val displayName: String) {
     WEEK("Wochen"),
     MONTH("Monate"),
     YEAR("Jahre"),
+
+    /**
+     * Alles in einem Eimer.
+     *
+     * Ergibt bewusst **kein** Diagramm - ein einzelner Balken ist keines.
+     * Die Oberflaeche zeigt dafuer Kennzahlen statt Kurven.
+     */
+    ALL("Gesamt"),
+    ;
+
+    val isSingleBucket: Boolean get() = this == ALL
 }
 
 /**
@@ -24,11 +35,14 @@ data class SessionFact(
     val startedAt: Long,
     val attemptCount: Int,
     val sendCount: Int,
+    val flashCount: Int = 0,
     val climbHeightMeters: Double?,
     val caloriesTotal: Double?,
     val workMs: Long,
     val totalMs: Long,
     val hardestSendValue: Int?,
+    val hrAvg: Int? = null,
+    val hrMax: Int? = null,
 )
 
 /** Alle Sessions eines Tages, einer Woche, eines Monats oder eines Jahres. */
@@ -40,13 +54,21 @@ data class PeriodBucket(
     val sessionCount: Int,
     val attemptCount: Int,
     val sendCount: Int,
+    val flashCount: Int,
     val climbHeightMeters: Double,
     val caloriesTotal: Double,
     val workMs: Long,
     val totalMs: Long,
     val hardestSendValue: Int?,
+
+    /** Mittel der Sessionmittel - nicht ueber alle Messwerte gewichtet. */
+    val hrAvg: Int? = null,
+    val hrMax: Int? = null,
 ) {
     val sendRate: Double? get() = if (attemptCount > 0) sendCount.toDouble() / attemptCount else null
+
+    /** Anteil der Versuche, die beim ersten Mal durchgingen. */
+    val flashRate: Double? get() = if (attemptCount > 0) flashCount.toDouble() / attemptCount else null
 }
 
 /** Kletterhoehe in den ueblichen Zeitraeumen, fuer das Dashboard. */
@@ -127,6 +149,8 @@ fun heightTotals(
 
 /** Erster Tag des Zeitraums, in dem [date] liegt. */
 fun startOfPeriod(date: LocalDate, period: Period): LocalDate = when (period) {
+    // Ein fester Anker, damit alles in denselben Eimer faellt.
+    Period.ALL -> LocalDate.EPOCH
     Period.DAY -> date
     // Montag, nach ISO - nicht die amerikanische Woche ab Sonntag.
     Period.WEEK -> date.with(WeekFields.ISO.dayOfWeek(), 1L)
@@ -135,6 +159,7 @@ fun startOfPeriod(date: LocalDate, period: Period): LocalDate = when (period) {
 }
 
 private fun shift(start: LocalDate, period: Period, steps: Long): LocalDate = when (period) {
+    Period.ALL -> start
     Period.DAY -> start.plusDays(steps)
     Period.WEEK -> start.plusWeeks(steps)
     Period.MONTH -> start.plusMonths(steps)
@@ -147,11 +172,14 @@ private fun fold(period: Period, start: LocalDate, group: List<SessionFact>) = P
     sessionCount = group.size,
     attemptCount = group.sumOf { it.attemptCount },
     sendCount = group.sumOf { it.sendCount },
+    flashCount = group.sumOf { it.flashCount },
     climbHeightMeters = group.sumOf { it.climbHeightMeters ?: 0.0 },
     caloriesTotal = group.sumOf { it.caloriesTotal ?: 0.0 },
     workMs = group.sumOf { it.workMs },
     totalMs = group.sumOf { it.totalMs },
     hardestSendValue = group.mapNotNull { it.hardestSendValue }.maxOrNull(),
+    hrAvg = group.mapNotNull { it.hrAvg }.average().takeIf { !it.isNaN() }?.toInt(),
+    hrMax = group.mapNotNull { it.hrMax }.maxOrNull(),
 )
 
 private fun empty(period: Period, start: LocalDate) = PeriodBucket(
@@ -160,6 +188,7 @@ private fun empty(period: Period, start: LocalDate) = PeriodBucket(
     sessionCount = 0,
     attemptCount = 0,
     sendCount = 0,
+    flashCount = 0,
     climbHeightMeters = 0.0,
     caloriesTotal = 0.0,
     workMs = 0L,

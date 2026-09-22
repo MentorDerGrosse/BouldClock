@@ -79,6 +79,23 @@ data class ChartColors(
 
     /** Der Grund, gegen den Luecken und Ringe gezeichnet werden. */
     val surface: Color = Color(0xFF171A1F),
+
+    /**
+     * Pulszonen - eine Leiter, keine Auswahl.
+     *
+     * Zonen sind **geordnet**, deshalb eine Farbe in sechs Helligkeiten statt
+     * sechs verschiedener Farben. Auf dunklem Grund heisst heller gleich
+     * lauter, also liegt die Ruhezone hinten und die Maximalzone vorn - die
+     * Helligkeit folgt der Anstrengung.
+     */
+    val zoneRamp: List<Color> = listOf(
+        Color(0xFF184F95),
+        Color(0xFF256ABF),
+        Color(0xFF3987E5),
+        Color(0xFF6DA7EC),
+        Color(0xFF9EC5F4),
+        Color(0xFFCDE2FB),
+    ),
 )
 
 val LocalChartColors = staticCompositionLocalOf { ChartColors() }

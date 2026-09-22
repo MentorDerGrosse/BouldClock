@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.RecoveryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:43:12.325Z" hostname="fedora" time="0.002">
+<testsuite name="at.mentor.bouldclockapp.core.RecoveryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.557Z" hostname="fedora" time="0.001">
   <properties/>
-  <testcase name="eine Zugprobe im Fenster verhindert den Wert" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.001"/>
+  <testcase name="eine Zugprobe im Fenster verhindert den Wert" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
   <testcase name="nach ungestoerter Pause wird gerechnet" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
-  <testcase name="fuer eine Zugprobe selbst gibt es keinen Wert" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
+  <testcase name="fuer eine Zugprobe selbst gibt es keinen Wert" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.001"/>
   <testcase name="ein Versuch nach dem Fenster stoert nicht" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
   <testcase name="ein neuer Versuch im Fenster verhindert den Wert" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
   <testcase name="ohne Pulswert am Fensterende kein Wert" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
-  <testcase name="forAll liefert nur die messbaren Versuche" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.001"/>
+  <testcase name="forAll liefert nur die messbaren Versuche" classname="at.mentor.bouldclockapp.core.RecoveryTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

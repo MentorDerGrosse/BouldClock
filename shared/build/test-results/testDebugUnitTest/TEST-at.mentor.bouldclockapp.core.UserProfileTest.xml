@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.UserProfileTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:43:12.335Z" hostname="fedora" time="0.003">
+<testsuite name="at.mentor.bouldclockapp.core.UserProfileTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.567Z" hostname="fedora" time="0.005">
   <properties/>
   <testcase name="das Alter altert von selbst mit" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.0"/>
   <testcase name="es gibt genau ein Profil" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.0"/>
-  <testcase name="keine Angabe beim Geschlecht ist moeglich" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.002"/>
-  <testcase name="die Voreinstellungen liegen im Bereich" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.001"/>
-  <testcase name="Gewicht und Alter bleiben im waehlbaren Bereich" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.0"/>
+  <testcase name="keine Angabe beim Geschlecht ist moeglich" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.004"/>
+  <testcase name="die Voreinstellungen liegen im Bereich" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.0"/>
+  <testcase name="Gewicht und Alter bleiben im waehlbaren Bereich" classname="at.mentor.bouldclockapp.core.UserProfileTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

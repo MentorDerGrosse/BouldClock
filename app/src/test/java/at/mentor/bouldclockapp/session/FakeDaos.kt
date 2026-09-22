@@ -8,6 +8,8 @@ import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.data.db.dao.AttemptAggregate
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
+import at.mentor.bouldclockapp.data.db.dao.HrSessionRange
+import at.mentor.bouldclockapp.data.db.dao.HrZoneSeconds
 import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.data.db.dao.GradeBucket
@@ -216,6 +218,33 @@ class FakeHrSampleDao(private val samples: MutableList<HrSampleEntity> = mutable
     override suspend fun deleteForSession(sessionId: String) {
         samples.removeAll { it.sessionId == sessionId }
     }
+
+    override fun observeBySession(sessionId: String, minAccuracy: Int): Flow<List<HrSampleEntity>> =
+        flowOf(samples.filter { it.sessionId == sessionId && it.accuracy >= minAccuracy })
+
+    override fun observeSessionRanges(minAccuracy: Int): Flow<List<HrSessionRange>> =
+        flowOf(
+            samples.filter { it.accuracy >= minAccuracy }
+                .groupBy { it.sessionId }
+                .map { (id, values) ->
+                    HrSessionRange(
+                        sessionId = id,
+                        minBpm = values.minOf { it.bpm },
+                        maxBpm = values.maxOf { it.bpm },
+                        avgBpm = values.map { it.bpm }.average().toInt(),
+                        samples = values.size,
+                    )
+                },
+        )
+
+    override fun observeZoneSeconds(
+        minAccuracy: Int,
+        z1: Int,
+        z2: Int,
+        z3: Int,
+        z4: Int,
+        z5: Int,
+    ): Flow<List<HrZoneSeconds>> = flowOf(emptyList())
 }
 
 class FakeMetricSampleDao : MetricSampleDao {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:43:12.343Z" hostname="fedora" time="0.002">
+<testsuite name="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.578Z" hostname="fedora" time="0.003">
   <properties/>
   <testcase name="fremde Pfade werden nicht eingeordnet" classname="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" time="0.002"/>
   <testcase name="Schreiben und Einordnen benutzen denselben Pfad" classname="at.mentor.bouldclockapp.sync.ArrivedSensorFileTest" time="0.0"/>
