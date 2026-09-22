@@ -15,8 +15,10 @@ import at.mentor.bouldclockapp.data.health.ExerciseRecorder
 import at.mentor.bouldclockapp.data.sensor.RawSensorRecorder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Haelt Puls- und Sensoraufzeichnung am Leben, solange eine Session laeuft.
@@ -48,7 +50,7 @@ class SessionRecordingService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             ACTION_START -> intent.getStringExtra(EXTRA_SESSION_ID)?.let(::beginRecording)
-            ACTION_STOP -> endRecording()
+            ACTION_STOP -> endRecording(intent.getStringExtra(EXTRA_SESSION_ID))
         }
         return START_NOT_STICKY
     }
@@ -81,8 +83,16 @@ class SessionRecordingService : LifecycleService() {
         )
     }
 
-    private fun endRecording() {
+    /**
+     * Beendet die Aufzeichnung und meldet, sobald alles geschrieben ist.
+     *
+     * [requestedId] kommt aus dem Intent und wird auch dann gemeldet, wenn gar
+     * nicht aufgezeichnet wurde - sonst wartet der Aufrufer auf ein Signal, das
+     * nie kommt.
+     */
+    private fun endRecording(requestedId: String?) {
         val sessionId = this.sessionId ?: run {
+            requestedId?.let { RecordingHandoff.markWritten(it) }
             stopSelf()
             return
         }
@@ -99,6 +109,9 @@ class SessionRecordingService : LifecycleService() {
             chunks.forEach { database.sensorChunkDao().upsert(it) }
         }.invokeOnCompletion {
             LiveMetrics.clear()
+            // Erst jetzt stehen die Dateizeilen - vorher findet die Auswertung
+            // den Luftdruckverlauf nicht.
+            RecordingHandoff.markWritten(sessionId)
             stopSelf()
         }
     }
@@ -142,6 +155,9 @@ class SessionRecordingService : LifecycleService() {
         /** Wie oft der Puffer in die Datenbank wandert. */
         private const val FLUSH_INTERVAL_MS = 10_000L
 
+        /** Wie lange das Sessionende auf die letzten Zeilen wartet. */
+        private const val STOP_TIMEOUT_MS = 5_000L
+
         fun start(context: Context, sessionId: String) {
             context.startForegroundService(
                 Intent(context, SessionRecordingService::class.java).apply {
@@ -151,12 +167,27 @@ class SessionRecordingService : LifecycleService() {
             )
         }
 
-        fun stop(context: Context) {
+        /**
+         * Beendet die Aufzeichnung und wartet, bis alles geschrieben ist.
+         *
+         * Das Warten ist der Punkt: direkt danach wird die Kletterhoehe aus dem
+         * Luftdruckverlauf gerechnet, und der ist erst vollstaendig, wenn der
+         * Dienst seine Dateien geschlossen und die Zeilen abgelegt hat.
+         *
+         * Mit Frist, damit ein haengender Dienst nicht das Sessionende blockiert
+         * - dann fehlt eben die Hoehe, so wie vorher immer.
+         */
+        suspend fun stopAndAwait(context: Context, sessionId: String) {
+            RecordingHandoff.expect()
             context.startService(
                 Intent(context, SessionRecordingService::class.java).apply {
                     action = ACTION_STOP
+                    putExtra(EXTRA_SESSION_ID, sessionId)
                 },
             )
+            withTimeoutOrNull(STOP_TIMEOUT_MS) {
+                RecordingHandoff.writtenSessionId.first { it == sessionId }
+            }
         }
     }
 }

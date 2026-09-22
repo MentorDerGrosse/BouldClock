@@ -1713,6 +1713,39 @@ public class AttemptDao_Impl(
     }
   }
 
+  public override suspend fun sessionsMissingClimbHeight(): List<String> {
+    val _sql: String = """
+        |
+        |        SELECT DISTINCT a.sessionId FROM attempt a
+        |        WHERE a.deletedAt IS NULL
+        |          AND a.endedAt IS NOT NULL
+        |          AND a.climbHeightMeters IS NULL
+        |          AND EXISTS (
+        |              SELECT 1 FROM sensor_chunk c
+        |              WHERE c.sessionId = a.sessionId AND c.sensor = 'PRESSURE'
+        |          )
+        |          AND EXISTS (
+        |              SELECT 1 FROM session s
+        |              WHERE s.id = a.sessionId AND s.deletedAt IS NULL AND s.state = 'FINISHED'
+        |          )
+        |        
+        """.trimMargin()
+    return performSuspending(__db, true, false) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _result: MutableList<String> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: String
+          _item = _stmt.getText(0)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override fun observeProblemTallies(): Flow<List<ProblemTally>> {
     val _sql: String = """
         |
