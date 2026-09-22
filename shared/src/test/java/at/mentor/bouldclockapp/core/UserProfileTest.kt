@@ -64,3 +64,49 @@ class UserProfileTest {
         BiologicalSex.entries.forEach { assertTrue(it.displayName.isNotBlank()) }
     }
 }
+
+/**
+ * Das Profil muss die Koerperdaten ueber die Uebertragung retten.
+ *
+ * Ohne sie waere die erste Synchronisierung nach dem Messen ein stiller
+ * Datenverlust - und Ruhepuls und Groesse sind genau die Werte, die die
+ * Kalorienrechnung individuell machen.
+ */
+class ProfilePayloadBodyTest {
+
+    private val profile = at.mentor.bouldclockapp.data.db.entity.UserProfileEntity(
+        weightKg = 73,
+        birthYear = 2005,
+        sex = at.mentor.bouldclockapp.core.model.BiologicalSex.MALE,
+        heightCm = 180,
+        restingHrBpm = 54,
+        maxHrBpm = 191,
+        meta = at.mentor.bouldclockapp.data.db.entity.RecordMeta.now(1_000L),
+    )
+
+    @org.junit.Test
+    fun `Groesse Ruhepuls und Maximalpuls ueberstehen die Uebertragung`() {
+        val raw = at.mentor.bouldclockapp.data.sync.ProfilePayload(profile).toJson()
+        val restored = at.mentor.bouldclockapp.data.sync.ProfilePayload.fromJson(raw).profile
+
+        org.junit.Assert.assertEquals(180, restored.heightCm)
+        org.junit.Assert.assertEquals(54, restored.restingHrBpm)
+        org.junit.Assert.assertEquals(191, restored.maxHrBpm)
+        org.junit.Assert.assertEquals(73, restored.weightKg)
+    }
+
+    @org.junit.Test
+    fun `ein altes Paket ohne Koerperdaten bleibt lesbar`() {
+        val alt = org.json.JSONObject(
+            at.mentor.bouldclockapp.data.sync.ProfilePayload(profile).toJson(),
+        ).apply {
+            remove("heightCm"); remove("restingHrBpm"); remove("maxHrBpm")
+        }.toString()
+
+        val restored = at.mentor.bouldclockapp.data.sync.ProfilePayload.fromJson(alt).profile
+
+        org.junit.Assert.assertNull(restored.heightCm)
+        org.junit.Assert.assertNull(restored.restingHrBpm)
+        org.junit.Assert.assertEquals(73, restored.weightKg)
+    }
+}

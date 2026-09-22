@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.sync.PayloadReferencesTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-22T21:17:27.484Z" hostname="fedora" time="0.01">
+<testsuite name="at.mentor.bouldclockapp.sync.PayloadReferencesTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:29:58.141Z" hostname="fedora" time="0.004">
   <properties/>
-  <testcase name="altes Paket ohne Halle und Boulder bleibt lesbar" classname="at.mentor.bouldclockapp.sync.PayloadReferencesTest" time="0.009"/>
+  <testcase name="altes Paket ohne Halle und Boulder bleibt lesbar" classname="at.mentor.bouldclockapp.sync.PayloadReferencesTest" time="0.003"/>
   <testcase name="Halle und Boulder ueberstehen die Uebertragung" classname="at.mentor.bouldclockapp.sync.PayloadReferencesTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

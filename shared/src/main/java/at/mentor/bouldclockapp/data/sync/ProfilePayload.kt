@@ -19,6 +19,11 @@ data class ProfilePayload(val profile: UserProfileEntity) {
         put("weightKg", profile.weightKg)
         put("birthYear", profile.birthYear)
         put("sex", profile.sex.name)
+        // Ohne diese drei wuerde die erste Synchronisierung sie wieder
+        // ausloeschen - sie stehen im Profil, also muessen sie mitfahren.
+        putOpt("heightCm", profile.heightCm)
+        putOpt("restingHrBpm", profile.restingHrBpm)
+        putOpt("maxHrBpm", profile.maxHrBpm)
         put("createdAt", profile.meta.createdAt)
         put("updatedAt", profile.meta.updatedAt)
     }.toString()
@@ -33,6 +38,9 @@ data class ProfilePayload(val profile: UserProfileEntity) {
                     sex = BiologicalSex.entries
                         .firstOrNull { it.name == json.optString("sex") }
                         ?: BiologicalSex.UNSPECIFIED,
+                    heightCm = json.optIntOrNull("heightCm"),
+                    restingHrBpm = json.optIntOrNull("restingHrBpm"),
+                    maxHrBpm = json.optIntOrNull("maxHrBpm"),
                     meta = RecordMeta(
                         createdAt = json.optLong("createdAt", 0L),
                         updatedAt = json.optLong("updatedAt", 0L),
@@ -43,3 +51,7 @@ data class ProfilePayload(val profile: UserProfileEntity) {
         }
     }
 }
+
+/** Fehlende Felder bleiben leer, statt zu null zu werden. */
+private fun JSONObject.optIntOrNull(key: String): Int? =
+    if (isNull(key)) null else optInt(key).takeIf { has(key) }

@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
 
@@ -48,8 +49,17 @@ data class AttemptEntity(
     /** Optional - Ein-Tap-Logging kennt den Boulder nicht. */
     val problemId: String? = null,
 
-    /** Fortlaufend ab 1 innerhalb der Session. */
+    /**
+     * Fortlaufend ab 1 innerhalb der Session - ueber **alle** Bloecke.
+     *
+     * Also auch ueber Zugproben. Die Nummer sagt "der wievielte Block an der
+     * Wand", nicht "der wievielte Versuch"; die Versuchsnummer fuer die Anzeige
+     * ergibt sich aus der Position unter den Versuchen.
+     */
     val ordinal: Int,
+
+    /** Echter Versuch oder nur Zuege probiert - siehe [AttemptKind]. */
+    val kind: AttemptKind = AttemptKind.ATTEMPT,
 
     /**
      * Beginnt mit diesem Versuch ein neuer Boulder?

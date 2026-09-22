@@ -14,6 +14,7 @@ import at.mentor.bouldclockapp.core.metrics.fillGaps
 import at.mentor.bouldclockapp.core.metrics.groupRuns
 import at.mentor.bouldclockapp.core.metrics.heightTotals
 import at.mentor.bouldclockapp.core.metrics.startOfPeriod
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.BiologicalSex
 import at.mentor.bouldclockapp.core.model.LandmarkComparison
@@ -59,8 +60,14 @@ data class SessionDetail(
      * Dieselbe Regel wie in der Zusammenfassung auf der Uhr: getrennt wird an
      * der beim Protokollieren gesetzten Grenze, nicht an gleichen Graden.
      */
+    /** Nur echte Versuche - eine Zugprobe gehoert zum laufenden Boulder, zaehlt aber nicht. */
+    val realAttempts: List<AttemptEntity>
+        get() = attempts.filter { it.meta.deletedAt == null && it.kind.isAttempt }
+
     val boulders: List<BoulderRun> get() {
-        val visible = attempts.filter { it.meta.deletedAt == null && it.endedAt != null }
+        val visible = attempts.filter {
+            it.meta.deletedAt == null && it.endedAt != null && it.kind.isAttempt
+        }
         val runs = groupRuns(visible.map { it.toFact() })
         var index = 0
         return runs.map { run ->
@@ -117,6 +124,18 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     private val repository = SessionSyncRepository(db, application.filesDir)
     private val sender = SessionSyncSender(application, repository)
     private val zone: ZoneId = ZoneId.systemDefault()
+
+    init {
+        // Beim Start alles neu durchrechnen.
+        //
+        // Dieselbe Rechnung wie auf der Uhr, nur von dieser Seite angestossen -
+        // damit die Kalorien nach einer Aenderung am Modell auch dann stimmen,
+        // wenn die Uhr gerade nicht in Reichweite ist. Idempotent: gleiche
+        // Rohwerte, gleiches Ergebnis.
+        viewModelScope.launch {
+            db.sessionDao().finishedIds().forEach { repository.refreshSummary(it) }
+        }
+    }
 
     // --- Bestaende ---
 
@@ -257,6 +276,17 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     fun setAttemptTopMove(sessionId: String, attemptId: String, move: Int?) =
         editAttempt(sessionId, attemptId) { it.copy(topMoveReached = move?.takeIf { m -> m > 0 }) }
 
+    /**
+     * Macht aus einem Versuch eine Zugprobe und zurueck.
+     *
+     * Der Ausweg, wenn der Knopf auf der Uhr vergessen wurde - und damit muss
+     * man ihn dort nicht treffen. Eine Zugprobe faellt aus Versuchszahl,
+     * Erfolgsquote und Gradpyramide heraus, zaehlt aber weiter fuer die
+     * Kalorien, und die Erholung des Versuchs davor wird neu bestimmt.
+     */
+    fun setAttemptKind(sessionId: String, attemptId: String, kind: AttemptKind) =
+        editAttempt(sessionId, attemptId) { it.copy(kind = kind) }
+
     /** Weich geloescht: ein hart entfernter Versuch kaeme bei der Uhr nie an. */
     fun deleteAttempt(sessionId: String, attemptId: String) = edit(sessionId) {
         db.attemptDao().softDelete(attemptId, now())
@@ -336,7 +366,13 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- Profil ---
 
-    fun saveProfile(weightKg: Int, ageYears: Int, sex: BiologicalSex) {
+    fun saveProfile(
+        weightKg: Int,
+        ageYears: Int,
+        sex: BiologicalSex,
+        heightCm: Int?,
+        restingHrBpm: Int?,
+    ) {
         viewModelScope.launch {
             val existing = db.userProfileDao().get()
             val timestamp = now()
@@ -345,6 +381,11 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
                     weightKg = ProfileRanges.clampWeight(weightKg),
                     birthYear = LocalDate.now().year - ProfileRanges.clampAge(ageYears),
                     sex = sex,
+                    heightCm = heightCm,
+                    restingHrBpm = restingHrBpm,
+                    // Nicht eingebbar: der hoechste je gemessene Wert gehoert
+                    // der Uhr, nicht der Meinung.
+                    maxHrBpm = existing?.maxHrBpm,
                     meta = existing?.meta?.touched(timestamp) ?: RecordMeta.now(timestamp),
                 ),
             )

@@ -207,8 +207,8 @@ private fun BouldClockApp() {
                         val profile by viewModel.profile.collectAsStateWithLifecycle()
                         ProfileScreen(
                             profile = profile,
-                            onSave = { weight, age, sex ->
-                                viewModel.saveProfile(weight, age, sex)
+                            onSave = { weight, age, sex, height, restingHr ->
+                                viewModel.saveProfile(weight, age, sex, height, restingHr)
                                 go(Destination.DASHBOARD)
                             },
                             modifier = Modifier.padding(padding),
@@ -248,6 +248,7 @@ private fun DetailRoute(
             onGradeChange = { id, grade -> viewModel.setAttemptGrade(sessionId, id, grade) },
             onAngleChange = { id, degrees -> viewModel.setAttemptAngle(sessionId, id, degrees) },
             onTopMoveChange = { id, move -> viewModel.setAttemptTopMove(sessionId, id, move) },
+            onKindChange = { id, kind -> viewModel.setAttemptKind(sessionId, id, kind) },
             onDeleteAttempt = { viewModel.deleteAttempt(sessionId, it) },
             onAssignProblem = { ids, problemId ->
                 viewModel.assignProblem(sessionId, ids, problemId)

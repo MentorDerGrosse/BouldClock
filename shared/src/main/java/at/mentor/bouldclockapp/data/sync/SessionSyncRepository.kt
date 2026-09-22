@@ -2,6 +2,7 @@ package at.mentor.bouldclockapp.data.sync
 
 import at.mentor.bouldclockapp.core.model.SyncState
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
+import at.mentor.bouldclockapp.data.db.SessionAnalysis
 import at.mentor.bouldclockapp.data.db.buildSessionSummary
 import at.mentor.bouldclockapp.data.db.entity.SensorChunkEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
@@ -129,16 +130,27 @@ class SessionSyncRepository(
         }
 
         val endedAt = session.endedAt ?: return
+        val now = System.currentTimeMillis()
+
+        // Erholung neu bestimmen: wird am Handy ein Versuch zur Zugprobe
+        // gemacht oder geloescht, aendert das, welche Pausen ungestoert waren.
+        SessionAnalysis.applyRecovery(db.attemptDao(), db.hrSampleDao(), session.id, now)
+
+        // Dieselbe Kalorienrechnung wie auf der Uhr. Liefe sie hier anders,
+        // wuerde jede Korrektur am Handy die Zahlen der Uhr still veraendern.
+        val energy = SessionAnalysis.energy(
+            db.attemptDao(), db.hrSampleDao(), db.userProfileDao(), session,
+        )
+
         db.sessionSummaryDao().upsert(
             buildSessionSummary(
                 session = session,
                 aggregate = db.attemptDao().aggregate(session.id),
                 hrAvg = db.hrSampleDao().avgBetween(session.id, session.startedAt, endedAt, MIN_ACCURACY),
                 hrMax = db.hrSampleDao().maxBetween(session.id, session.startedAt, endedAt, MIN_ACCURACY),
-                caloriesTotal = db.metricSampleDao()
-                    .total(session.id, at.mentor.bouldclockapp.core.model.SessionMetric.CALORIES),
-                caloriesOnWall = null,
-                now = System.currentTimeMillis(),
+                caloriesTotal = energy?.totalKcal,
+                caloriesOnWall = energy?.onWallKcal,
+                now = now,
             ),
         )
     }

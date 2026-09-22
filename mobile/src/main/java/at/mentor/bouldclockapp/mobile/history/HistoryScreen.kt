@@ -89,7 +89,7 @@ fun HistoryScreen(
             item { PyramidCard(grades) }
         }
 
-        if (hrr60.size >= 2) {
+        if (hrr60.isNotEmpty()) {
             item { SectionHeader("Erholung nach 60 s", trailing = "höher ist besser") }
             item { Hrr60Card(hrr60) }
         }
@@ -210,14 +210,29 @@ private fun PyramidCard(grades: List<GradeBucket>) {
     }
 }
 
+/**
+ * Der Erholungstrend.
+ *
+ * Ab zwei Sessions als Verlauf, davor als einzelne Zahl - versteckt wurde die
+ * Karte frueher, und dann schien die Messung gar nicht zu existieren.
+ */
 @Composable
 private fun Hrr60Card(points: List<Hrr60Point>) {
     BouldCard {
-        TrendLine(values = points.map { it.hrr60Avg.toDouble() })
+        if (points.size >= 2) {
+            TrendLine(values = points.map { it.hrr60Avg.toDouble() })
+        } else {
+            Text(
+                text = "−${points.last().hrr60Avg}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         Text(
-            text = "Puls fällt in der ersten Minute nach dem Absteigen um " +
+            text = "Der Puls fällt in der ersten Minute nach dem Absteigen um " +
                 "${points.last().hrr60Avg} Schläge. Steigt diese Zahl über Monate, " +
-                "wird die Grundlage besser.",
+                "wird die Grundlage besser." +
+                if (points.size < 2) " Ab der zweiten Session wird daraus ein Verlauf." else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

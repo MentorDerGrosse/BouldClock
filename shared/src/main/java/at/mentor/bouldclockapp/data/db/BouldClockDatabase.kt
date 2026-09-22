@@ -41,7 +41,7 @@ import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
     // ergaenzen. Bleibt die Nummer stehen, weigert sich Room beim ersten
     // Datenbankzugriff, eine vorhandene Datei zu oeffnen - die App stirbt dann
     // beim Start, ohne dass ein Test das vorher merkt.
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class BouldClockDatabase : RoomDatabase() {
@@ -158,6 +158,24 @@ abstract class BouldClockDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Zugproben und Koerperdaten.
+         *
+         * `kind` bekommt einen Vorgabewert, damit bestehende Zeilen Versuche
+         * bleiben - alles, was bisher aufgezeichnet wurde, war einer.
+         * Groesse, Ruhe- und Maximalpuls bleiben leer und werden gemessen.
+         */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE attempt ADD COLUMN kind TEXT NOT NULL DEFAULT 'ATTEMPT'",
+                )
+                db.execSQL("ALTER TABLE user_profile ADD COLUMN heightCm INTEGER")
+                db.execSQL("ALTER TABLE user_profile ADD COLUMN restingHrBpm INTEGER")
+                db.execSQL("ALTER TABLE user_profile ADD COLUMN maxHrBpm INTEGER")
+            }
+        }
+
         private fun build(context: Context): BouldClockDatabase =
             Room.databaseBuilder(context, BouldClockDatabase::class.java, NAME)
                 // Rooms Default, hier bewusst explizit: die Absturzsicherheit der
@@ -165,7 +183,7 @@ abstract class BouldClockDatabase : RoomDatabase() {
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7,
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
                 )
                 // Notnagel fuer die Entwicklung: eine vergessene Migration soll
                 // die Datenbank leeren, nicht die App unstartbar machen. Vor der
