@@ -13,6 +13,7 @@ import androidx.health.services.client.data.ExerciseLapSummary
 import androidx.health.services.client.data.ExerciseType
 import androidx.health.services.client.data.ExerciseUpdate
 import androidx.health.services.client.data.HeartRateAccuracy
+import java.util.Locale
 import androidx.health.services.client.ExerciseUpdateCallback
 import androidx.health.services.client.endExercise
 import androidx.health.services.client.getCapabilities
@@ -67,6 +68,53 @@ class ExerciseRecorder(
     @Volatile
     var latestKcal: Double? = null
         private set
+
+    /**
+     * Die beiden Kalorienquellen der Uhr, getrennt mitgezaehlt.
+     *
+     * Health Services bietet denselben Wert zweimal an: als laufenden
+     * Zaehlerstand ([DataType.CALORIES_TOTAL]) und als Einzelmeldungen je
+     * Zeitabschnitt ([DataType.CALORIES]). Am 21.09.2026 meldete der
+     * Zaehlerstand ueber eine ganze Klettersession 34 Mal **0,0**, waehrend die
+     * Verfuegbarkeit durchgehend AVAILABLE war - bei kurzen Sessions mit wachem
+     * Bildschirm lieferte er dagegen Werte.
+     *
+     * Deshalb zaehlen wir beides mit und schreiben beides ins Protokoll. Was
+     * gespeichert wird, entscheidet [usableKcal].
+     */
+    @Volatile
+    private var platformKcal: Double = 0.0
+
+    @Volatile
+    private var intervalKcal: Double = 0.0
+
+    @Volatile
+    private var totalReports: Int = 0
+
+    @Volatile
+    private var intervalReports: Int = 0
+
+    /**
+     * Zustand und angerechnete Dauer der Uebung.
+     *
+     * Der Verdacht: Health Services rechnet Kalorien nur an, solange es die
+     * Uebung als aktiv zaehlt. Steht die angerechnete Dauer still, waehrend die
+     * Session laeuft, erklaert das die Nullen - und dann hilft kein anderer
+     * Datentyp, sondern nur ein anderer Umgang mit dem Zustand.
+     */
+    @Volatile
+    private var exerciseState: String? = null
+
+    @Volatile
+    private var activeSeconds: Long = 0L
+
+    /** Wie oft eine Dauerangabe ueberhaupt kam - "fehlt" ist etwas anderes als "null". */
+    @Volatile
+    private var checkpoints: Int = 0
+
+    /** Wie viele Meldungen die Uhr insgesamt geschickt hat. */
+    @Volatile
+    private var updates: Int = 0
 
     /** Bisher in dieser Session geklettene Hoehe in Metern - fuer die Live-Anzeige. */
     @Volatile
@@ -154,6 +202,7 @@ class ExerciseRecorder(
         }
 
         override fun onExerciseUpdateReceived(update: ExerciseUpdate) {
+            noteExerciseState(update)
             val metrics = update.latestMetrics
 
             val heartRates = metrics.getData(DataType.HEART_RATE_BPM).map { point ->
@@ -171,9 +220,27 @@ class ExerciseRecorder(
                 )
             }
 
-            val calories = metrics.getData(DataType.CALORIES_TOTAL)?.also {
-                latestKcal = it.total.toDouble()
-            }?.toSample(sessionId, SessionMetric.CALORIES)
+            metrics.getData(DataType.CALORIES).let { intervals ->
+                if (intervals.isNotEmpty()) {
+                    intervalKcal += intervals.sumOf { it.value }
+                    intervalReports += intervals.size
+                }
+            }
+
+            val cumulative = metrics.getData(DataType.CALORIES_TOTAL)?.also {
+                platformKcal = it.total.toDouble()
+                totalReports++
+            }
+            latestKcal = usableKcal()
+
+            val calories = cumulative?.let {
+                MetricSampleEntity(
+                    sessionId = sessionId,
+                    metric = SessionMetric.CALORIES,
+                    timestampMs = it.end.toEpochMilli(),
+                    value = usableKcal(),
+                )
+            }
 
             val elevation = metrics.getData(DataType.ELEVATION_GAIN_TOTAL)?.also {
                 latestElevationGain = it.total.toDouble()
@@ -189,6 +256,31 @@ class ExerciseRecorder(
         }
     }
 
+    /** Haelt Zustand und angerechnete Dauer fest; Wechsel landen im Protokoll. */
+    private fun noteExerciseState(update: ExerciseUpdate) {
+        updates++
+        update.activeDurationCheckpoint?.let {
+            activeSeconds = it.activeDuration.seconds
+            checkpoints++
+        }
+
+        val state = update.exerciseStateInfo.toString()
+        if (state != exerciseState) {
+            exerciseState = state
+            Diagnostics.log(context, TAG, "Uebungszustand -> $state")
+        }
+    }
+
+    /**
+     * Der Kalorienwert, den wir speichern.
+     *
+     * Der Zaehlerstand der Plattform, solange er sich bewegt - sonst die Summe
+     * ihrer Einzelmeldungen. Beides sind Zahlen der Uhr, keine gerechneten;
+     * welche gegriffen hat, steht im Protokoll.
+     */
+    private fun usableKcal(): Double =
+        platformKcal.takeIf { it > 0.0 } ?: intervalKcal
+
     /** Schreibt den Puffer weg. Regelmaessig aufrufen, nicht nur am Ende. */
     suspend fun flush() {
         val (heartRates, metricSamples) = synchronized(buffer) {
@@ -200,6 +292,29 @@ class ExerciseRecorder(
         }
         if (heartRates.isNotEmpty()) hrSampleDao.insertAll(heartRates)
         if (metricSamples.isNotEmpty()) metricSampleDao.insertAll(metricSamples)
+
+        logCalories()
+    }
+
+    /**
+     * Schreibt beide Kalorienquellen ins Protokoll.
+     *
+     * Zum Nachsehen, welche der beiden ueberhaupt zaehlt - siehe [platformKcal].
+     * Sobald das geklaert ist, kann diese Zeile wieder raus.
+     */
+    private fun logCalories() {
+        if (sessionId == null) return
+        Diagnostics.log(
+            context,
+            TAG,
+            String.format(
+                Locale.ROOT,
+                "Kalorien: Zaehler=%.2f (%d), Intervallsumme=%.2f (%d), gespeichert=%.2f, " +
+                    "angerechnet=%d s (%d Angaben), Meldungen=%d, Zustand=%s",
+                platformKcal, totalReports, intervalKcal, intervalReports, usableKcal(),
+                activeSeconds, checkpoints, updates, exerciseState,
+            ),
+        )
     }
 
     suspend fun stop() {
@@ -213,6 +328,14 @@ class ExerciseRecorder(
         latestKcal = null
         latestElevationGain = null
         heartRateState = HeartRateState.STARTING
+        platformKcal = 0.0
+        intervalKcal = 0.0
+        totalReports = 0
+        intervalReports = 0
+        exerciseState = null
+        activeSeconds = 0L
+        checkpoints = 0
+        updates = 0
     }
 
     private fun CumulativeDataPoint<Double>.toSample(
@@ -237,6 +360,8 @@ class ExerciseRecorder(
         val WANTED_DATA_TYPES = listOf(
             DataType.HEART_RATE_BPM,
             DataType.CALORIES_TOTAL,
+            // Dieselbe Groesse als Einzelmeldungen - siehe platformKcal.
+            DataType.CALORIES,
             // Die Uhr liefert die Kletterhoehe direkt - kein Rechnen mit
             // Luftdruckdifferenzen und keine Hallenhoehe noetig.
             DataType.ELEVATION_GAIN_TOTAL,

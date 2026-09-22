@@ -427,20 +427,7 @@ class SessionController(
         // Hoehen nachtragen, bevor aggregiert wird - das Aggregat summiert sie.
         applyClimbHeights(finished.id, now)
 
-        val summary = buildSessionSummary(
-            session = finished,
-            aggregate = attemptDao.aggregate(finished.id),
-            hrAvg = hrSampleDao.avgBetween(
-                finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
-            ),
-            hrMax = hrSampleDao.maxBetween(
-                finished.id, finished.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
-            ),
-            caloriesTotal = metricSampleDao.total(finished.id, SessionMetric.CALORIES),
-            caloriesOnWall = caloriesOnWall(finished.id),
-            now = now,
-        )
-        summaryDao.upsert(summary)
+        val summary = writeSummary(finished, now)
 
         val runs = groupRuns(
             attemptDao.finishedBySession(finished.id).map { attempt ->
@@ -466,10 +453,11 @@ class SessionController(
      * Je Versuch und nicht ueber die ganze Session: der Sensor driftet ueber
      * Minuten um etwa einen Meter, ueber die Sekunden eines Versuchs kaum.
      */
-    private suspend fun applyClimbHeights(sessionId: String, now: Long) {
+    private suspend fun applyClimbHeights(sessionId: String, now: Long): Boolean {
         val trace = pressureTraceSource.trace(sessionId)
-        if (trace.isEmpty()) return
+        if (trace.isEmpty()) return false
 
+        var changed = false
         attemptDao.finishedBySession(sessionId).forEach { attempt ->
             val endedAt = attempt.endedAt ?: return@forEach
             if (attempt.climbHeightMeters != null) return@forEach
@@ -482,7 +470,65 @@ class SessionController(
             attemptDao.upsert(
                 attempt.copy(climbHeightMeters = height, meta = attempt.meta.touched(now)),
             )
+            changed = true
         }
+        return changed
+    }
+
+    /**
+     * Schreibt die Zusammenfassung einer Session.
+     *
+     * Idempotent - dieselbe Datenlage ergibt dieselbe Zeile. Deshalb laesst sie
+     * sich auch spaeter neu rechnen, etwa wenn Hoehen nachgetragen wurden.
+     */
+    private suspend fun writeSummary(session: SessionEntity, now: Long): SessionSummaryEntity {
+        val endedAt = session.endedAt ?: now
+        val summary = buildSessionSummary(
+            session = session,
+            aggregate = attemptDao.aggregate(session.id),
+            hrAvg = hrSampleDao.avgBetween(
+                session.id, session.startedAt, endedAt, SessionMetrics.MIN_HR_ACCURACY,
+            ),
+            hrMax = hrSampleDao.maxBetween(
+                session.id, session.startedAt, endedAt, SessionMetrics.MIN_HR_ACCURACY,
+            ),
+            caloriesTotal = metricSampleDao.total(session.id, SessionMetric.CALORIES),
+            caloriesOnWall = caloriesOnWall(session.id),
+            now = now,
+        )
+        summaryDao.upsert(summary)
+        return summary
+    }
+
+    /**
+     * Traegt Kletterhoehen in aelteren Sessions nach.
+     *
+     * Noetig, weil die Auswertung frueher vor dem Wegschreiben lief und deshalb
+     * **nie** eine Hoehe bekam - die Luftdruckdateien liegen aber vollstaendig
+     * vor. Einmal beim Start, und nur dort, wo tatsaechlich etwas fehlt.
+     *
+     * Sessions, in denen der Sensor nichts Brauchbares hergab, bleiben
+     * Kandidaten und werden bei jedem Start erneut geprueft. Das kostet einen
+     * Dateizugriff und erspart eine Merkspalte.
+     *
+     * Gibt die Sessions zurueck, in denen sich etwas geaendert hat - die
+     * gehoeren danach zum Handy.
+     */
+    suspend fun backfillClimbHeights(): List<String> = mutex.withLock {
+        val now = clock()
+        val running = _session.value?.id
+
+        attemptDao.sessionsMissingClimbHeight()
+            // Die laufende Session nicht anfassen - ihre Datei ist noch offen.
+            .filterNot { it == running }
+            .mapNotNull { sessionId ->
+                if (!applyClimbHeights(sessionId, now)) return@mapNotNull null
+                val session = sessionDao.byId(sessionId) ?: return@mapNotNull null
+                val touched = session.copy(meta = session.meta.touched(now))
+                sessionDao.upsert(touched)
+                writeSummary(touched, now)
+                sessionId
+            }
     }
 
     /**

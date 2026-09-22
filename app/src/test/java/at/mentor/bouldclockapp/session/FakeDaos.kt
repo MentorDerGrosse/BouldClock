@@ -158,6 +158,17 @@ class FakeAttemptDao : AttemptDao {
 
     override fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>> = flowOf(emptyList())
 
+    /**
+     * Vereinfacht: die echte Abfrage verlangt zusaetzlich eine
+     * Luftdruckaufzeichnung und eine beendete Session. Beides kennt dieses
+     * Double nicht - fuer den Zweck reicht "Versuch ohne Hoehe".
+     */
+    override suspend fun sessionsMissingClimbHeight(): List<String> =
+        attempts.values
+            .filter { it.meta.deletedAt == null && it.endedAt != null && it.climbHeightMeters == null }
+            .map { it.sessionId }
+            .distinct()
+
     override suspend fun setProblem(attemptId: String, problemId: String?, now: Long) {
         attempts[attemptId]?.let {
             attempts[attemptId] = it.copy(problemId = problemId, meta = it.meta.touched(now))

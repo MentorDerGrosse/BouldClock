@@ -573,6 +573,64 @@ class SessionControllerTest {
         assertEquals(4.0, finished.summary.maxClimbHeightMeters!!, 0.4)
     }
 
+    /**
+     * Nachtragen von Hoehen in einer Session, die ohne sie beendet wurde.
+     *
+     * Genau der Fall vom 21.09.2026: die Auswertung lief vor dem Wegschreiben,
+     * fand keinen Luftdruckverlauf und liess **jede** Hoehe leer - die Dateien
+     * lagen aber vollstaendig vor. Der Nachtrag holt sie zurueck.
+     */
+    @Test
+    fun `Hoehen lassen sich nachtraeglich eintragen`() = runTest {
+        // Beenden ohne Luftdruck - so sah es vorher auf dem Geraet aus.
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 20_000L)
+        advance(10_000)
+        val ohne = controller.finish()!!
+        assertNull(ohne.summary.climbHeightMeters)
+        assertNull(attempt(1).climbHeightMeters)
+
+        // Jetzt mit Verlauf nachtragen.
+        val nachtrag = newController(pressure = climbTrace(meters = 4.0))
+        val geaendert = nachtrag.backfillClimbHeights()
+
+        assertEquals(listOf(ohne.summary.sessionId), geaendert)
+        assertEquals(4.0, attempt(1).climbHeightMeters!!, 0.4)
+        assertEquals(
+            4.0,
+            summaryDao.summaries.getValue(ohne.summary.sessionId).climbHeightMeters!!,
+            0.4,
+        )
+    }
+
+    /** Zweimal nachtragen aendert nichts mehr - sonst liefe es bei jedem Start. */
+    @Test
+    fun `der Nachtrag meldet nur echte Aenderungen`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 20_000L)
+        advance(10_000)
+        controller.finish()
+
+        val nachtrag = newController(pressure = climbTrace(meters = 4.0))
+        assertEquals(1, nachtrag.backfillClimbHeights().size)
+        assertTrue(nachtrag.backfillClimbHeights().isEmpty())
+    }
+
+    /** Ohne brauchbaren Luftdruck bleibt alles, wie es war. */
+    @Test
+    fun `der Nachtrag laesst unmessbare Sessions unberuehrt`() = runTest {
+        controller.start()
+        advance(5_000)
+        doAttempt(climbMs = 20_000L)
+        advance(10_000)
+        controller.finish()
+
+        assertTrue(controller.backfillClimbHeights().isEmpty())
+        assertNull(attempt(1).climbHeightMeters)
+    }
+
     /** Ohne aufgezeichneten Luftdruck entsteht die Zusammenfassung trotzdem. */
     @Test
     fun `ohne Luftdruckverlauf bleibt die Hoehe leer`() = runTest {

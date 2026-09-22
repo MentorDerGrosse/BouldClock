@@ -151,6 +151,10 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             controller.resumeUnfinished()?.let { startRecording(it.id) }
             restored.value = true
 
+            // Hoehen nachtragen, die frueher wegen der falschen Reihenfolge
+            // nie gerechnet wurden. Die Luftdruckdateien liegen noch da.
+            controller.backfillClimbHeights().forEach { syncSender.sendSession(it) }
+
             // Beim Start nachholen, was beim letzten Mal nicht durchging - etwa
             // weil das Handy in der Halle nicht in Reichweite war.
             syncSender.syncPending()
@@ -255,13 +259,23 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { controller.logOutcome(resting.lastAttemptId, next) }
     }
 
+    /**
+     * Beendet die Session.
+     *
+     * Reihenfolge ist hier alles: **erst** die Aufzeichnung sauber beenden und
+     * abwarten, **dann** auswerten. Andersherum sucht die Auswertung den
+     * Luftdruckverlauf, den der Dienst noch nicht abgelegt hat - und die
+     * Kletterhoehe blieb still leer, bei jeder Session.
+     */
     fun finishSession() {
         viewModelScope.launch {
+            sessionId()?.let { SessionRecordingService.stopAndAwait(getApplication(), it) }
             finished.value = controller.finish()
-            SessionRecordingService.stop(getApplication())
             syncSender.syncPending()
         }
     }
+
+    private fun sessionId(): String? = controller.session.value?.id
 
     private fun startRecording(sessionId: String) {
         SessionRecordingService.start(getApplication(), sessionId)

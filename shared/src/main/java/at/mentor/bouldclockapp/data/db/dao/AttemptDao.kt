@@ -178,6 +178,31 @@ interface AttemptDao {
     )
     fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>>
 
+    /**
+     * Beendete Sessions, in denen Versuche ohne Kletterhoehe stehen, obwohl
+     * eine Luftdruckaufzeichnung vorliegt.
+     *
+     * Kandidaten fuers Nachtragen. Der Umweg ueber `sensor_chunk` spart das
+     * Lesen von Dateien, die es gar nicht gibt.
+     */
+    @Query(
+        """
+        SELECT DISTINCT a.sessionId FROM attempt a
+        WHERE a.deletedAt IS NULL
+          AND a.endedAt IS NOT NULL
+          AND a.climbHeightMeters IS NULL
+          AND EXISTS (
+              SELECT 1 FROM sensor_chunk c
+              WHERE c.sessionId = a.sessionId AND c.sensor = 'PRESSURE'
+          )
+          AND EXISTS (
+              SELECT 1 FROM session s
+              WHERE s.id = a.sessionId AND s.deletedAt IS NULL AND s.state = 'FINISHED'
+          )
+        """,
+    )
+    suspend fun sessionsMissingClimbHeight(): List<String>
+
     /** Ordnet einen Versuch einem Boulder zu - das Zusammenfuehren am Handy. */
     @Query(
         """
