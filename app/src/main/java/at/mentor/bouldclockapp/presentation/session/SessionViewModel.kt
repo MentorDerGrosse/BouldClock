@@ -227,13 +227,6 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         syncSender.sendProfile()
     }
 
-    /**
-     * Beginnt eine Zugprobe - Zuege ausprobieren, ohne einen Versuch zu
-     * verbrauchen. Aus der Pause oder direkt aus der Gradabfrage.
-     */
-    fun startMoveTest() {
-        viewModelScope.launch { controller.startMoveTest() }
-    }
 
     /**
      * Legt das Profil an.

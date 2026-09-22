@@ -10,13 +10,15 @@ import at.mentor.bouldclockapp.core.model.GradeSystem
  * der zwischen diesen Zustaenden schaltet:
  *
  *     Ready --> Climbing --> [Winkel] --> [Grad] --> Resting --> Climbing --> ...
- *                                                        |
- *                                                   MoveTesting
  *
  * Die Schritte in Klammern haengen von der Sessionart ab: der Wettkampf hat
- * keinen, das Board beide, alles andere nur den Grad. [MoveTesting] ist der
- * einzige Zweig, der nicht ueber den Ausloeser erreicht wird, sondern ueber
- * einen eigenen Knopf - sonst waere der Ausloeser mehrdeutig.
+ * keinen, das Board beide, alles andere nur den Grad.
+ *
+ * **Zuege probieren** hat bewusst keinen eigenen Zustand: es wird wie ein
+ * Versuch protokolliert und am Handy mit einem Tipp zur Zugprobe erklaert. Ein
+ * eigener Knopf auf der Uhr hat den Pausenbildschirm gesprengt, und eine
+ * Erkennung ueber den Beschleunigungssensor liess sich nicht sauber trennen -
+ * gemessen an einer echten Session ueberlappen Klettern und Pause zu stark.
  *
  * Entscheidend: aus [Resting] fuehrt **kein** automatischer Uebergang heraus.
  * Der Pausen-Timer ist ein Signal, kein Zustandswechsel. Laeuft er ab, vibriert
@@ -80,28 +82,6 @@ sealed interface SessionPhase {
             get() = !previousWasSend && previousGradeValue != null && previousGradeValue == gradeValue
     }
 
-    /**
-     * Einzelne Zuege probieren, ohne vom Start zu klettern.
-     *
-     * Beim Bouldern der Normalfall nach einem Sturz: zwei Sekunden verschnaufen,
-     * wieder an die Wand, die Stelle probieren. Koerperlich ist das Arbeit und
-     * muss in die Kalorien - es ist aber **kein Versuch** und darf weder die
-     * Versuchszahl noch die Erfolgsquote noch die Gradpyramide verfaelschen.
-     *
-     * Beim Beenden geht es ohne Grad- und Ergebnisabfrage zurueck in die Pause:
-     * es gibt nichts zu bewerten. Die Pause beginnt dabei von vorn, weil sie
-     * unterbrochen war.
-     */
-    data class MoveTesting(
-        val attemptId: String,
-        val startedAt: Long,
-
-        /** Der letzte echte Versuch - sein Ergebnis bleibt nachtragbar. */
-        val lastAttemptId: String,
-        val restTargetMs: Long,
-        val loggedOutcome: AttemptOutcome? = null,
-    ) : SessionPhase
-
     /** Zwischen zwei Versuchen. */
     data class Resting(
         val since: Long,
@@ -133,9 +113,6 @@ enum class TriggerAction(val label: String) {
     /** Naechster Versuch. Bewusst dasselbe Wort wie in [START_FIRST]: */
     /** "Start" heisst in der ganzen App "ein Versuch beginnt". */
     START_NEXT("Start"),
-
-    /** Zugprobe beenden - zurueck in die Pause, ohne Abfragen. */
-    END_MOVE_TEST("Fertig"),
 }
 
 val SessionPhase.nextAction: TriggerAction
@@ -145,7 +122,6 @@ val SessionPhase.nextAction: TriggerAction
         is SessionPhase.ChoosingAngle -> TriggerAction.CONFIRM_ANGLE
         is SessionPhase.Grading -> TriggerAction.CONFIRM_GRADE
         is SessionPhase.Resting -> TriggerAction.START_NEXT
-        is SessionPhase.MoveTesting -> TriggerAction.END_MOVE_TEST
     }
 
 /**

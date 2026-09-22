@@ -58,7 +58,6 @@ fun SessionScreen(
     onGradeChange: (Int) -> Unit,
     onAngleChange: (Int) -> Unit,
     onNewBoulder: () -> Unit,
-    onMoveTest: () -> Unit,
     onFinishSession: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -105,7 +104,6 @@ fun SessionScreen(
             onGradeChange = onGradeChange,
             onConfirm = onTrigger,
             onNewBoulder = onNewBoulder,
-            onMoveTest = onMoveTest,
             onFinishSession = onFinishSession,
             modifier = modifier,
         )
@@ -116,24 +114,10 @@ fun SessionScreen(
             isCompetition = type.isCompetition,
             onTrigger = onTrigger,
             onOutcome = onOutcome,
-            onMoveTest = onMoveTest,
             onFinishSession = onFinishSession,
             modifier = modifier,
         )
 
-        // Wie Klettern, nur ohne Abfragen danach - und sichtbar anders
-        // beschriftet, damit man nicht glaubt, ein Versuch laufe mit.
-        is SessionPhase.MoveTesting -> TriggerSurface(
-            onTrigger = onTrigger,
-            modifier = modifier,
-            onFinishSession = onFinishSession,
-        ) {
-            BigState(
-                value = RestDurations.format((now - phase.startedAt).coerceAtLeast(0L)),
-                caption = "Züge – zählt nicht als Versuch",
-                hint = "Tippen beendet",
-            )
-        }
     }
 }
 
@@ -153,7 +137,6 @@ private fun GradingContent(
     onGradeChange: (Int) -> Unit,
     onConfirm: () -> Unit,
     onNewBoulder: () -> Unit,
-    onMoveTest: () -> Unit,
     onFinishSession: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -161,21 +144,16 @@ private fun GradingContent(
         onConfirm = onConfirm,
         onFinishSession = onFinishSession,
         modifier = modifier,
-        extraButtons = {
-            if (phase.boulderAmbiguous) {
+        extraButtons = if (phase.boulderAmbiguous) {
+            {
                 CompactButton(
                     onClick = onNewBoulder,
                     colors = ButtonDefaults.filledTonalButtonColors(),
                     label = { Text("Neu", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
                 )
             }
-            // Der haeufige Fall nach einem Sturz: Grad bestaetigen und gleich
-            // die Stelle probieren. Ein Tipper statt zwei.
-            CompactButton(
-                onClick = onMoveTest,
-                colors = ButtonDefaults.filledTonalButtonColors(),
-                label = { Text("Zug", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
-            )
+        } else {
+            null
         },
     ) {
         GradePicker(
@@ -229,7 +207,6 @@ private fun RestingContent(
     isCompetition: Boolean,
     onTrigger: () -> Unit,
     onOutcome: (AttemptOutcome) -> Unit,
-    onMoveTest: () -> Unit,
     onFinishSession: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -314,14 +291,6 @@ private fun RestingContent(
             // "Start" heisst in der ganzen App "ein Versuch beginnt" - in Ready
             // wie hier. "Weiter" gehoert der Gradabfrage und heisst dort
             // "bestaetigen". Kurz schaltet weiter, lang hoert auf.
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CompactButton(
-                    onClick = onMoveTest,
-                    colors = ButtonDefaults.filledTonalButtonColors(),
-                    label = { Text("Zug", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
-                )
-            }
-
             CompactButton(
                 onClick = onTrigger,
                 onLongClick = onFinishSession,
@@ -400,7 +369,6 @@ private fun SessionRestingPreview() {
             onGradeChange = {},
             onAngleChange = {},
             onNewBoulder = {},
-            onMoveTest = {},
             onFinishSession = {},
         )
     }
@@ -425,7 +393,6 @@ private fun SessionGradingPreview() {
             onGradeChange = {},
             onAngleChange = {},
             onNewBoulder = {},
-            onMoveTest = {},
             onFinishSession = {},
         )
     }
@@ -447,7 +414,6 @@ private fun CompetitionRestingPreview() {
             onGradeChange = {},
             onAngleChange = {},
             onNewBoulder = {},
-            onMoveTest = {},
             onFinishSession = {},
         )
     }

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:29:58.171Z" hostname="fedora" time="0.004">
+<testsuite name="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-22T22:43:12.366Z" hostname="fedora" time="0.003">
   <properties/>
-  <testcase name="gepackte Daten kommen unveraendert zurueck" classname="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" time="0.003"/>
+  <testcase name="gepackte Daten kommen unveraendert zurueck" classname="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" time="0.002"/>
   <testcase name="Ausbruchsversuche werden abgewiesen" classname="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" time="0.0"/>
-  <testcase name="ein normaler Pfad wird uebernommen" classname="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" time="0.001"/>
+  <testcase name="ein normaler Pfad wird uebernommen" classname="at.mentor.bouldclockapp.sync.SyncProtocolPathTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

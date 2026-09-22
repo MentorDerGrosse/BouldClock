@@ -124,14 +124,6 @@ class SessionController(
 
     private suspend fun restorePhase(session: SessionEntity): SessionPhase {
         attemptDao.running(session.id)?.let { running ->
-            if (running.kind == AttemptKind.MOVE_TEST) {
-                return SessionPhase.MoveTesting(
-                    attemptId = running.id,
-                    startedAt = running.startedAt,
-                    lastAttemptId = attemptDao.lastFinished(session.id)?.id ?: running.id,
-                    restTargetMs = session.restTargetMs,
-                )
-            }
             return SessionPhase.Climbing(running.id, running.startedAt)
         }
         val last = attemptDao.lastFinished(session.id)
@@ -161,96 +153,8 @@ class SessionController(
             is SessionPhase.Climbing -> endAttempt(session, phase, now)
             is SessionPhase.ChoosingAngle -> applyAngle(session, phase, now)
             is SessionPhase.Grading -> applyGrade(session, phase, now)
-            is SessionPhase.MoveTesting -> endMoveTest(session, phase, now)
         }
         true
-    }
-
-    /**
-     * Beginnt eine Zugprobe.
-     *
-     * Aus der Pause heraus oder direkt aus der Gradabfrage - dort ist es der
-     * haeufige Fall: gestuerzt, kurz verschnauft, gleich die Stelle probieren.
-     * Der Grad wird dabei mit bestaetigt, damit es ein Tipper bleibt.
-     *
-     * Gibt zurueck, ob tatsaechlich eine begonnen wurde.
-     */
-    suspend fun startMoveTest(): Boolean = mutex.withLock {
-        val session = _session.value ?: return@withLock false
-        val now = clock()
-
-        val lastAttemptId = when (val phase = _phase.value) {
-            is SessionPhase.Resting -> phase.lastAttemptId
-            is SessionPhase.Grading -> {
-                applyGrade(session, phase, now)
-                phase.attemptId
-            }
-            // Ueberall sonst ergibt eine Zugprobe keinen Sinn.
-            else -> return@withLock false
-        }
-
-        val block = AttemptEntity(
-            id = UUID.randomUUID().toString(),
-            sessionId = session.id,
-            ordinal = attemptDao.nextOrdinal(session.id),
-            kind = AttemptKind.MOVE_TEST,
-            startedAt = now,
-            // Eine Zugprobe gehoert zum laufenden Boulder, sie beginnt keinen.
-            startsNewBoulder = false,
-            meta = RecordMeta.now(now),
-        )
-        attemptDao.upsert(block)
-        _phase.value = SessionPhase.MoveTesting(
-            attemptId = block.id,
-            startedAt = now,
-            lastAttemptId = lastAttemptId,
-            restTargetMs = session.restTargetMs,
-        )
-        true
-    }
-
-    /**
-     * Beendet eine Zugprobe.
-     *
-     * Ohne Grad- und Ergebnisabfrage zurueck in die Pause - es gibt nichts zu
-     * bewerten. Die Pause beginnt von vorn: sie war unterbrochen.
-     */
-    private suspend fun endMoveTest(
-        session: SessionEntity,
-        phase: SessionPhase.MoveTesting,
-        now: Long,
-    ) {
-        val block = attemptDao.byId(phase.attemptId)
-
-        // Fehlstart wie beim Versuch: spurlos verwerfen.
-        if (block != null && now - block.startedAt < MIN_ATTEMPT_MS) {
-            attemptDao.delete(block.id)
-            _phase.value = restorePhase(session)
-            return
-        }
-
-        if (block != null) {
-            attemptDao.upsert(
-                block.copy(
-                    endedAt = now,
-                    hrEnd = nearestHr(session.id, now),
-                    hrAvg = hrSampleDao.avgBetween(
-                        session.id, block.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
-                    ),
-                    hrMax = hrSampleDao.maxBetween(
-                        session.id, block.startedAt, now, SessionMetrics.MIN_HR_ACCURACY,
-                    ),
-                    meta = block.meta.touched(now),
-                ),
-            )
-        }
-
-        _phase.value = SessionPhase.Resting(
-            since = now,
-            targetMs = phase.restTargetMs,
-            lastAttemptId = phase.lastAttemptId,
-            loggedOutcome = attemptDao.byId(phase.lastAttemptId)?.outcome,
-        )
     }
 
     private suspend fun beginAttempt(session: SessionEntity, now: Long) {

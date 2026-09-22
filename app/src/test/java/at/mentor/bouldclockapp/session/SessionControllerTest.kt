@@ -8,6 +8,7 @@ import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.metrics.Barometry
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.metrics.PressurePoint
 import at.mentor.bouldclockapp.core.metrics.PressureTraceSource
 import at.mentor.bouldclockapp.core.session.RestProgress
@@ -297,9 +298,15 @@ class SessionControllerTest {
         assertEquals(36, first.hrr60)
     }
 
-    /** Eine Zugprobe unterbricht die Pause genauso wie ein neuer Versuch. */
+    /**
+     * Eine nachtraeglich zur Zugprobe erklaerte Runde unterbricht die Erholung.
+     *
+     * So entsteht eine Zugprobe: auf der Uhr wie ein Versuch protokolliert, am
+     * Handy umgewidmet. Die Regel selbst steht in RecoveryTest - hier geht es
+     * darum, dass der Controller sie beim Neurechnen anwendet.
+     */
     @Test
-    fun `HRR60 faellt weg wenn dazwischen Zuege probiert werden`() = runTest {
+    fun `eine umgewidmete Runde unterbricht die Erholung`() = runTest {
         controller.start()
         advance(5_000); press()
         advance(30_000)
@@ -309,16 +316,24 @@ class SessionControllerTest {
         hrDao.add(sessionId, at = now + 60_000L, bpm = 132)
         advance(gradingMs); press()
 
-        // Nach 20 s kurz an die Wand - mitten im Erholungsfenster.
-        advance(20_000)
-        controller.startMoveTest()
-        advance(15_000)
-        press()
-
+        // Nach 20 s noch einmal kurz an die Wand - mitten im Erholungsfenster.
+        advance(20_000); press()
+        advance(15_000); press()
+        advance(gradingMs); press()
         advance(180_000)
         controller.finish()
 
+        val erster = attemptDao.attempts.values.first { it.ordinal == 1 }
+        // Als Versuch gezaehlt stoert er die Erholung ohnehin.
+        assertNull(erster.hrr60)
+
+        // Und als Zugprobe erklaert ebenso - nur zaehlt er dann nicht als Versuch.
+        val zweiter = attemptDao.attempts.values.first { it.ordinal == 2 }
+        attemptDao.upsert(zweiter.copy(kind = AttemptKind.MOVE_TEST))
+        controller.backfillAnalysis()
+
         assertNull(attemptDao.attempts.values.first { it.ordinal == 1 }.hrr60)
+        assertEquals(1, summaryDao.summaries.getValue(sessionId).attemptCount)
     }
 
     @Test

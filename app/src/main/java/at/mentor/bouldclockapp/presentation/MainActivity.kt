@@ -167,7 +167,6 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                                         onGradeChange = viewModel::previewGrade,
                                         onAngleChange = viewModel::previewAngle,
                                         onNewBoulder = viewModel::confirmGradeAsNewBoulder,
-                                        onMoveTest = viewModel::startMoveTest,
                                         onFinishSession = viewModel::finishSession,
                                     )
                                 } else {
