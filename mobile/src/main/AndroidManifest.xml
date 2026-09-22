@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.BouldClock">
+
+        <!-- Weckt die App, sobald die Gegenseite etwas ablegt - auch wenn sie
+             geschlossen ist. Dieselbe Klasse auf Uhr und Handy. -->
+        <service
+            android:name="at.mentor.bouldclockapp.data.sync.SyncListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <!-- Sensordateien kommen ueber einen Kanal, nicht als Datenpunkt. -->
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/bouldclock" />
+            </intent-filter>
+        </service>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

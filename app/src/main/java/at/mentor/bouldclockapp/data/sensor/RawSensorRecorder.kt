@@ -46,15 +46,16 @@ class RawSensorRecorder(private val context: Context) {
 
         bootAtMillis = startedAtMillis - SystemClock.elapsedRealtime()
 
-        val directory = sessionDirectory(sessionId).apply { mkdirs() }
+        sessionDirectory(sessionId).mkdirs()
         recordings = TRACKED.mapNotNull { tracked ->
             val sensor = manager.getDefaultSensor(tracked.androidType) ?: return@mapNotNull null
-            val file = File(directory, "${tracked.kind.name}.bcs")
+            val relativePath = SensorChunkEntity.relativePath(sessionId, tracked.kind)
+            val file = File(context.filesDir, relativePath)
             Recording(
                 tracked = tracked,
                 sensor = sensor,
                 file = file,
-                relativePath = "$SENSOR_DIR/$sessionId/${file.name}",
+                relativePath = relativePath,
                 writer = SensorChunkWriter(
                     sink = file.outputStream(),
                     sensor = tracked.kind,
@@ -134,7 +135,7 @@ class RawSensorRecorder(private val context: Context) {
     }
 
     private fun sessionDirectory(sessionId: String) =
-        File(File(context.filesDir, SENSOR_DIR), sessionId)
+        File(File(context.filesDir, SensorChunkEntity.DIR), sessionId)
 
     private class Recording(
         val tracked: TrackedSensor,
@@ -154,8 +155,6 @@ class RawSensorRecorder(private val context: Context) {
     )
 
     private companion object {
-        const val SENSOR_DIR = "sensors"
-
         /**
          * Beschleunigung und Drehrate bei etwa 50 Hz - fein genug fuer Zuege und
          * Aufschlaege, grob genug, um in zwei Stunden nicht zweistellige
