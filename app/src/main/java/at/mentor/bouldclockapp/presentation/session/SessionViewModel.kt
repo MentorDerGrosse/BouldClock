@@ -76,7 +76,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     private val db = BouldClockDatabase.get(application)
     private val settings = AppSettings(application)
-    private val controller = SessionController(
+    private val controller = SessionController(y
         sessionDao = db.sessionDao(),
         attemptDao = db.attemptDao(),
         hrSampleDao = db.hrSampleDao(),
