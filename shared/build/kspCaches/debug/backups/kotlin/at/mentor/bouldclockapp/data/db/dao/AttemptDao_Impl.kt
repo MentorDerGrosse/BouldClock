@@ -1905,6 +1905,55 @@ public class AttemptDao_Impl(
     }
   }
 
+  public override fun observeFalls(): Flow<List<FallTally>> {
+    val _sql: String = """
+        |
+        |        SELECT a.sessionId                           AS sessionId,
+        |               COUNT(*)                              AS falls,
+        |               COALESCE(SUM(a.climbHeightMeters), 0) AS fallMeters,
+        |               MAX(a.climbHeightMeters)              AS deepestMeters
+        |        FROM attempt a
+        |        JOIN session s ON s.id = a.sessionId
+        |        WHERE a.deletedAt IS NULL
+        |          AND a.endedAt IS NOT NULL
+        |          AND a.kind = 'ATTEMPT'
+        |          AND a.outcome = 'FAIL'
+        |          AND s.deletedAt IS NULL
+        |        GROUP BY a.sessionId
+        |        
+        """.trimMargin()
+    return createFlow(__db, false, arrayOf("attempt", "session")) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _columnIndexOfSessionId: Int = 0
+        val _columnIndexOfFalls: Int = 1
+        val _columnIndexOfFallMeters: Int = 2
+        val _columnIndexOfDeepestMeters: Int = 3
+        val _result: MutableList<FallTally> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: FallTally
+          val _tmpSessionId: String
+          _tmpSessionId = _stmt.getText(_columnIndexOfSessionId)
+          val _tmpFalls: Int
+          _tmpFalls = _stmt.getLong(_columnIndexOfFalls).toInt()
+          val _tmpFallMeters: Double
+          _tmpFallMeters = _stmt.getDouble(_columnIndexOfFallMeters)
+          val _tmpDeepestMeters: Double?
+          if (_stmt.isNull(_columnIndexOfDeepestMeters)) {
+            _tmpDeepestMeters = null
+          } else {
+            _tmpDeepestMeters = _stmt.getDouble(_columnIndexOfDeepestMeters)
+          }
+          _item = FallTally(_tmpSessionId,_tmpFalls,_tmpFallMeters,_tmpDeepestMeters)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override fun observeProblemTallies(): Flow<List<ProblemTally>> {
     val _sql: String = """
         |

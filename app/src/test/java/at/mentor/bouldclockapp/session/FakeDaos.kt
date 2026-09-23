@@ -5,6 +5,7 @@ import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SyncState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.model.AttemptKind
+import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.data.db.dao.AttemptAggregate
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
@@ -12,6 +13,7 @@ import at.mentor.bouldclockapp.data.db.dao.HrSessionRange
 import at.mentor.bouldclockapp.data.db.dao.HrZoneSeconds
 import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
+import at.mentor.bouldclockapp.data.db.dao.FallTally
 import at.mentor.bouldclockapp.data.db.dao.GradeBucket
 import at.mentor.bouldclockapp.data.db.dao.ProblemTally
 import at.mentor.bouldclockapp.data.db.dao.SessionBaseline
@@ -184,6 +186,23 @@ class FakeAttemptDao : AttemptDao {
     }
 
     override fun observeProblemTallies(): Flow<List<ProblemTally>> = flowOf(emptyList())
+
+    override fun observeFalls(): Flow<List<FallTally>> = flowOf(
+        attempts.values
+            .filter {
+                it.meta.deletedAt == null && it.endedAt != null &&
+                    it.kind == AttemptKind.ATTEMPT && it.outcome == AttemptOutcome.FAIL
+            }
+            .groupBy { it.sessionId }
+            .map { (id, list) ->
+                FallTally(
+                    sessionId = id,
+                    falls = list.size,
+                    fallMeters = list.sumOf { it.climbHeightMeters ?: 0.0 },
+                    deepestMeters = list.mapNotNull { it.climbHeightMeters }.maxOrNull(),
+                )
+            },
+    )
 }
 
 /** Liefert Pulswerte aus einer vorgegebenen Kurve. */

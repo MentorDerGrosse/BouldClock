@@ -32,18 +32,18 @@ import at.mentor.bouldclockapp.data.db.dao.GradeBucket
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.mobile.axisLabel
 import at.mentor.bouldclockapp.mobile.detail.Metric
-import at.mentor.bouldclockapp.mobile.formatDurationShort
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.LocalChartColors
 import at.mentor.bouldclockapp.mobile.formatBpm
 import at.mentor.bouldclockapp.mobile.formatDurationWithUnit
 import at.mentor.bouldclockapp.mobile.formatMeters
 import at.mentor.bouldclockapp.mobile.label
+import androidx.compose.foundation.layout.fillMaxHeight
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
+import at.mentor.bouldclockapp.mobile.ui.CardPair
 import at.mentor.bouldclockapp.mobile.ui.ChartBar
+import at.mentor.bouldclockapp.mobile.ui.ChartCard
 import at.mentor.bouldclockapp.mobile.ui.ChartLegend
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import at.mentor.bouldclockapp.mobile.ui.ColumnChart
 import at.mentor.bouldclockapp.mobile.ui.PointLineChart
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
@@ -102,33 +102,47 @@ fun HistoryScreen(
         // Bei "Gesamt" gibt es nur einen Eimer - ein einzelner Balken ist kein
         // Diagramm. Dann stehen oben die Kennzahlen und hier nichts.
         if (!period.isSingleBucket) {
-            item { SectionHeader("Höhenmeter je ${period.singular()}", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
-            item { HeightChartCard(buckets) }
-
-            item { SectionHeader("Volumen", trailing = "antippen") { onOpenMetric(Metric.VOLUME) } }
-            item { VolumeChartCard(buckets) }
-
-            item { SectionHeader("Kalorien", trailing = "antippen") { onOpenMetric(Metric.CALORIES) } }
-            item { CalorieChartCard(buckets) }
-
+            item { SectionHeader("Verläufe", trailing = "je Karte antippen") }
+            item { HeightChartCard(buckets, period) { onOpenMetric(Metric.HEIGHT) } }
+            item { VolumeChartCard(buckets) { onOpenMetric(Metric.VOLUME) } }
+            // Kalorien und Puls nebeneinander: beide beschreiben denselben
+            // Abend von zwei Seiten, und in voller Breite kaeme man vor lauter
+            // Scrollen nie dazu, sie zusammen zu sehen.
             if (buckets.any { it.hrAvg != null }) {
-                item { SectionHeader("Puls im Schnitt", trailing = "antippen") { onOpenMetric(Metric.PULSE) } }
-                item { PulseChartCard(buckets) }
+                item {
+                    CardPair {
+                        CalorieChartCard(
+                            buckets = buckets,
+                            compact = true,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        ) { onOpenMetric(Metric.CALORIES) }
+                        PulseChartCard(
+                            buckets = buckets,
+                            compact = true,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        ) { onOpenMetric(Metric.PULSE) }
+                    }
+                }
+            } else {
+                item { CalorieChartCard(buckets) { onOpenMetric(Metric.CALORIES) } }
             }
         }
 
+        item { SectionHeader("Auswertung") }
+
+        if (buckets.any { it.fallCount > 0 }) {
+            item { FallCard(buckets) { onOpenMetric(Metric.FALLS) } }
+        }
+
         if (zones.isNotEmpty()) {
-            item { SectionHeader("Zeit in Pulszonen") }
             item { ZoneCard(zones, zoneBounds) }
         }
 
         if (grades.isNotEmpty()) {
-            item { SectionHeader("Gradpyramide", trailing = "alle Sessions") }
             item { PyramidCard(grades) }
         }
 
         if (hrr60.isNotEmpty()) {
-            item { SectionHeader("Erholung nach 60 s", trailing = "höher ist besser") }
             item { Hrr60Card(hrr60) }
         }
 
@@ -169,6 +183,9 @@ private fun BucketRow(bucket: PeriodBucket) {
         StatRow("Höhe", formatMeters(bucket.climbHeightMeters))
         StatRow("Wandzeit", formatDurationWithUnit(bucket.workMs))
         if (bucket.caloriesTotal > 0.0) StatRow("Kalorien", formatKcal(bucket.caloriesTotal))
+        if (bucket.fallCount > 0) {
+            StatRow("Stürze", "${bucket.fallCount} · ${formatMeters(bucket.fallMeters)}")
+        }
         bucket.hrAvg?.let { avg ->
             StatRow("Puls", bucket.hrMax?.let { max -> "$avg / $max bpm" } ?: formatBpm(avg))
         }
@@ -212,7 +229,7 @@ private fun TotalsCard(totals: PeriodBucket) {
 @Composable
 private fun ZoneCard(zones: Map<HeartRateZone, Int>, bounds: List<Int>) {
     val ramp = LocalChartColors.current.zoneRamp
-    BouldCard {
+    ChartCard(title = "Zeit in Pulszonen", accent = ramp.last()) {
         StackedShareBar(
             parts = HeartRateZone.entries.mapIndexed { index, zone ->
                 Triple(zoneLabel(zone, index, bounds), (zones[zone] ?: 0).toLong(), ramp[index])
@@ -238,33 +255,75 @@ private fun ZoneCard(zones: Map<HeartRateZone, Int>, bounds: List<Int>) {
 }
 
 @Composable
-private fun CalorieChartCard(buckets: List<PeriodBucket>) {
+private fun CalorieChartCard(
+    buckets: List<PeriodBucket>,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    onOpen: () -> Unit,
+) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard {
+    ChartCard(
+        title = "Kalorien",
+        modifier = modifier,
+        accent = LocalChartColors.current.calories.base,
+        trailing = if (compact) null else "mehr",
+        onClick = onOpen,
+    ) {
         ColumnChart(
             bars = buckets.map { ChartBar(axisLabel(it), it.caloriesTotal) },
+            height = if (compact) 108.dp else 136.dp,
             selectedIndex = selected,
             onSelect = { selected = it },
             valueFormat = { formatKcal(it) },
+            palette = LocalChartColors.current.calories,
+            maxLabels = if (compact) 4 else 7,
             emptyHint = "Noch keine Kalorien berechnet – dafür braucht es Puls und Profil.",
         )
     }
 }
 
 @Composable
-private fun PulseChartCard(buckets: List<PeriodBucket>) {
+private fun PulseChartCard(
+    buckets: List<PeriodBucket>,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    onOpen: () -> Unit,
+) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard {
+    ChartCard(
+        title = if (compact) "Puls" else "Puls im Schnitt",
+        modifier = modifier,
+        accent = LocalChartColors.current.pulse.base,
+        trailing = if (compact) null else "mehr",
+        onClick = onOpen,
+    ) {
         PointLineChart(
             bars = buckets.map {
                 ChartBar(axisLabel(it), (it.hrAvg ?: 0).toDouble(), (it.hrMax ?: 0).toDouble())
             },
+            height = if (compact) 108.dp else 136.dp,
             selectedIndex = selected,
             onSelect = { selected = it },
-            valueFormat = { "${it.toInt()} bpm im Schnitt" },
-            highlightFormat = { "Spitze ${it.toInt()} bpm" },
+            // Nebeneinander ist kein Platz fuer ausgeschriebene Saetze.
+            valueFormat = if (compact) {
+                { "${it.toInt()} bpm" }
+            } else {
+                { "${it.toInt()} bpm im Schnitt" }
+            },
+            highlightFormat = if (compact) {
+                { "max ${it.toInt()}" }
+            } else {
+                { "Spitze ${it.toInt()} bpm" }
+            },
+            palette = LocalChartColors.current.pulse,
+            maxLabels = if (compact) 4 else 7,
         )
-        ChartLegend(first = "Schnitt", second = "Spitze")
+        ChartLegend(
+            first = "Schnitt",
+            second = "Spitze",
+            palette = LocalChartColors.current.pulse,
+            vertical = compact,
+        )
     }
 }
 
@@ -287,23 +346,35 @@ private fun PeriodPicker(selected: Period, onSelect: (Period) -> Unit) {
 }
 
 @Composable
-private fun HeightChartCard(buckets: List<PeriodBucket>) {
+private fun HeightChartCard(buckets: List<PeriodBucket>, period: Period, onOpen: () -> Unit) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard {
+    ChartCard(
+        title = "Höhenmeter je ${period.singular()}",
+        accent = LocalChartColors.current.height.base,
+        trailing = "mehr",
+        onClick = onOpen,
+    ) {
         // Eine Reihe, also keine Legende - die Ueberschrift sagt, was gezeigt wird.
         ColumnChart(
             bars = buckets.map { ChartBar(axisLabel(it), it.climbHeightMeters) },
+            height = 136.dp,
             selectedIndex = selected,
             onSelect = { selected = it },
             valueFormat = { formatMeters(it) },
+            palette = LocalChartColors.current.height,
         )
     }
 }
 
 @Composable
-private fun VolumeChartCard(buckets: List<PeriodBucket>) {
+private fun VolumeChartCard(buckets: List<PeriodBucket>, onOpen: () -> Unit) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard {
+    ChartCard(
+        title = "Volumen",
+        accent = LocalChartColors.current.volume.base,
+        trailing = "mehr",
+        onClick = onOpen,
+    ) {
         ColumnChart(
             bars = buckets.map {
                 ChartBar(
@@ -312,12 +383,48 @@ private fun VolumeChartCard(buckets: List<PeriodBucket>) {
                     highlight = it.sendCount.toDouble(),
                 )
             },
+            height = 136.dp,
             selectedIndex = selected,
             onSelect = { selected = it },
             valueFormat = { "${it.toInt()} Versuche" },
             highlightFormat = { "${it.toInt()} Tops" },
+            palette = LocalChartColors.current.volume,
         )
-        ChartLegend(first = "Versuche", second = "davon Tops")
+        ChartLegend(
+            first = "Versuche",
+            second = "davon Tops",
+            palette = LocalChartColors.current.volume,
+        )
+    }
+}
+
+/**
+ * Stuerze und die Summe der Fallhoehen.
+ *
+ * Bei einem Sturz faellt man vom hoechsten Punkt - die gemessene Kletterhoehe
+ * *ist* die Fallhoehe.
+ */
+@Composable
+private fun FallCard(buckets: List<PeriodBucket>, onOpen: () -> Unit) {
+    val falls = buckets.sumOf { it.fallCount }
+    val meters = buckets.sumOf { it.fallMeters }
+    ChartCard(
+        title = "Stürze",
+        accent = LocalChartColors.current.falls.base,
+        trailing = "mehr",
+        onClick = onOpen,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            StatTile(falls.toString(), "Stürze")
+            StatTile(formatMeters(meters), "gefallen")
+            StatTile(
+                value = if (falls > 0) formatMeters(meters / falls) else "–",
+                label = "im Schnitt",
+            )
+        }
     }
 }
 
@@ -352,7 +459,11 @@ private fun PyramidCard(grades: List<GradeBucket>) {
     // steht. Das Zweite ist die Zahl, die man Freunden sagt.
     var onlySends by remember { mutableStateOf(false) }
 
-    BouldCard {
+    ChartCard(
+        title = "Gradpyramide",
+        accent = LocalChartColors.current.volume.base,
+        trailing = "alle Sessions",
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = !onlySends,
@@ -382,6 +493,7 @@ private fun PyramidCard(grades: List<GradeBucket>) {
         ChartLegend(
             first = if (onlySends) "Tops" else "Versuche",
             second = if (onlySends) "davon Flash" else "davon Tops",
+            palette = LocalChartColors.current.volume,
         )
         Text(
             text = if (onlySends) {
@@ -404,7 +516,11 @@ private fun PyramidCard(grades: List<GradeBucket>) {
  */
 @Composable
 private fun Hrr60Card(points: List<Hrr60Point>) {
-    BouldCard {
+    ChartCard(
+        title = "Erholung nach 60 s",
+        accent = LocalChartColors.current.pulse.base,
+        trailing = "höher ist besser",
+    ) {
         if (points.size >= 2) {
             TrendLine(values = points.map { it.hrr60Avg.toDouble() })
         } else {

@@ -202,6 +202,36 @@ interface AttemptDao {
     )
     fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>>
 
+    /**
+     * Stuerze je Session, mit Fallhoehe.
+     *
+     * Ein Sturz ist ein protokollierter Fehlversuch - nicht aus dem
+     * Beschleunigungssensor erkannt. Das wurde an echten Daten geprueft und
+     * verworfen: beim Bouldern faellt man nicht passiv, das Handgelenk ist
+     * durchgehend aktiv beschleunigt, und die laengste Strecke unter 0,5 g lag
+     * bei 141 ms - ausgerechnet bei einem Flash.
+     *
+     * Die Fallhoehe ist die gemessene Kletterhoehe: man faellt vom hoechsten
+     * Punkt, es ist also dieselbe Zahl unter anderem Namen.
+     */
+    @Query(
+        """
+        SELECT a.sessionId                           AS sessionId,
+               COUNT(*)                              AS falls,
+               COALESCE(SUM(a.climbHeightMeters), 0) AS fallMeters,
+               MAX(a.climbHeightMeters)              AS deepestMeters
+        FROM attempt a
+        JOIN session s ON s.id = a.sessionId
+        WHERE a.deletedAt IS NULL
+          AND a.endedAt IS NOT NULL
+          AND a.kind = 'ATTEMPT'
+          AND a.outcome = 'FAIL'
+          AND s.deletedAt IS NULL
+        GROUP BY a.sessionId
+        """,
+    )
+    fun observeFalls(): Flow<List<FallTally>>
+
     /** Ordnet einen Versuch einem Boulder zu - das Zusammenfuehren am Handy. */
     @Query(
         """
@@ -230,6 +260,14 @@ interface AttemptDao {
     )
     fun observeProblemTallies(): Flow<List<ProblemTally>>
 }
+
+/** Stuerze einer Session. */
+data class FallTally(
+    val sessionId: String,
+    val falls: Int,
+    val fallMeters: Double,
+    val deepestMeters: Double?,
+)
 
 /** Eine Stufe der Gradpyramide. */
 data class GradeBucket(

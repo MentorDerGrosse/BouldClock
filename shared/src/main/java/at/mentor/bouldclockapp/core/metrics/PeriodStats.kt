@@ -43,6 +43,10 @@ data class SessionFact(
     val hardestSendValue: Int?,
     val hrAvg: Int? = null,
     val hrMax: Int? = null,
+
+    /** Protokollierte Fehlversuche und die Summe ihrer Fallhoehen. */
+    val fallCount: Int = 0,
+    val fallMeters: Double = 0.0,
 )
 
 /** Alle Sessions eines Tages, einer Woche, eines Monats oder eines Jahres. */
@@ -64,6 +68,9 @@ data class PeriodBucket(
     /** Mittel der Sessionmittel - nicht ueber alle Messwerte gewichtet. */
     val hrAvg: Int? = null,
     val hrMax: Int? = null,
+
+    val fallCount: Int = 0,
+    val fallMeters: Double = 0.0,
 ) {
     val sendRate: Double? get() = if (attemptCount > 0) sendCount.toDouble() / attemptCount else null
 
@@ -190,6 +197,8 @@ private fun fold(period: Period, start: LocalDate, group: List<SessionFact>) = P
     hardestSendValue = group.mapNotNull { it.hardestSendValue }.maxOrNull(),
     hrAvg = group.mapNotNull { it.hrAvg }.average().takeIf { !it.isNaN() }?.toInt(),
     hrMax = group.mapNotNull { it.hrMax }.maxOrNull(),
+    fallCount = group.sumOf { it.fallCount },
+    fallMeters = group.sumOf { it.fallMeters },
 )
 
 private fun empty(period: Period, start: LocalDate) = PeriodBucket(

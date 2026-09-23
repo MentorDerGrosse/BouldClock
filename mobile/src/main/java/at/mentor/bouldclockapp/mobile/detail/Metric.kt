@@ -61,5 +61,17 @@ enum class Metric(
             "insgesamt war; die Spitze, wie weit du hochgegangen bist.",
         isLevel = true,
     ),
+
+    FALLS(
+        title = "Stürze",
+        unit = "Anzahl und Meter",
+        what = "Wie oft du abgeflogen bist und aus welcher Höhe zusammengerechnet.",
+        why = "Ein Sturz ist ein protokollierter Fehlversuch – nicht aus dem " +
+            "Beschleunigungssensor erkannt. Das wurde an echten Daten geprüft " +
+            "und verworfen: beim Bouldern fällt man nicht passiv, das " +
+            "Handgelenk ist durchgehend aktiv beschleunigt.\n\n" +
+            "Die Fallhöhe ist die gemessene Kletterhöhe – man fällt vom " +
+            "höchsten Punkt, es ist dieselbe Zahl unter anderem Namen.",
+    ),
     ;
 }

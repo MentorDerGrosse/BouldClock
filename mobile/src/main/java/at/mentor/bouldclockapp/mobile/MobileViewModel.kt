@@ -29,12 +29,14 @@ import at.mentor.bouldclockapp.core.model.LandmarkComparison
 import at.mentor.bouldclockapp.core.model.Landmarks
 import at.mentor.bouldclockapp.core.model.ProfileRanges
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
+import at.mentor.bouldclockapp.data.db.dao.FallTally
 import at.mentor.bouldclockapp.data.db.dao.GradeBucket
 import at.mentor.bouldclockapp.data.db.dao.HrSessionRange
 import at.mentor.bouldclockapp.data.db.dao.HrZoneSeconds
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.data.db.dao.ProblemTally
+import at.mentor.bouldclockapp.data.db.dao.SessionBaseline
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.GymEntity
 import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
@@ -204,6 +206,11 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Puls je Session - Minimum, Schnitt, Maximum. */
+    /** Stuerze je Session - protokollierte Fehlversuche mit ihrer Fallhoehe. */
+    val falls: StateFlow<Map<String, FallTally>> = db.attemptDao().observeFalls()
+        .map { list -> list.associateBy { it.sessionId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     val hrRanges: StateFlow<Map<String, HrSessionRange>> =
         db.hrSampleDao().observeSessionRanges(SessionMetrics.MIN_HR_ACCURACY)
             .map { list -> list.associateBy { it.sessionId } }
@@ -234,8 +241,9 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- Abgeleitetes ---
 
-    val dashboard: StateFlow<DashboardState> = summaries
-        .map { list -> buildDashboard(list) }
+    val dashboard: StateFlow<DashboardState> = combine(summaries, falls) { list, byId ->
+        buildDashboard(list, byId)
+    }
         .stateIn(viewModelScope, SharingStarted.Eagerly, DashboardState(lastSession = null))
 
     /**
@@ -261,7 +269,7 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     val readiness: StateFlow<Readiness> = summaries
         .map { list ->
             readiness(
-                facts = list.map { it.toFact() },
+                facts = list.map { it.toFact(emptyMap()) },
                 lastRpe = list.maxByOrNull { it.startedAt }?.rpe,
                 today = LocalDate.now(zone),
                 zone = zone,
@@ -277,8 +285,8 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     val period: StateFlow<Period> = historyPeriod
 
     val historyBuckets: StateFlow<List<PeriodBucket>> =
-        combine(summaries, historyPeriod) { list, selected ->
-            val buckets = bucket(list.map { it.toFact() }, selected, zone)
+        combine(summaries, historyPeriod, falls) { list, selected, fallsById ->
+            val buckets = bucket(list.map { it.toFact(fallsById) }, selected, zone)
             fillGaps(buckets, selected, count = slotsFor(selected), until = LocalDate.now(zone))
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -325,6 +333,8 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
                     hardestSendValue = active.mapNotNull { it.hardestSendValue }.maxOrNull(),
                     hrAvg = active.mapNotNull { it.hrAvg }.average().takeIf { !it.isNaN() }?.toInt(),
                     hrMax = active.mapNotNull { it.hrMax }.maxOrNull(),
+                    fallCount = active.sumOf { it.fallCount },
+                    fallMeters = active.sumOf { it.fallMeters },
                 )
             }
         }
@@ -377,6 +387,28 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Der eigene Schnitt fuer vergleichbare Sessions.
+     *
+     * Vergleichbar heisst: gleicher Typ, gleiche Halle. Eine Volumensession
+     * gegen eine Limit-Session zu stellen waere statistischer Unsinn - genau
+     * deshalb ist der Typ in dieser App eine Dimension und keine Notiz.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val baseline: StateFlow<SessionBaseline?> = openSessionId
+        .flatMapLatest { id -> if (id == null) flowOf(null) else summaries.map { id } }
+        .map { id ->
+            if (id == null) return@map null
+            val session = db.sessionDao().byId(id) ?: return@map null
+            db.sessionSummaryDao().baseline(
+                type = session.type,
+                gymId = session.gymId,
+                since = 0L,
+                excludeSessionId = id,
+            ).takeIf { it.sessionCount >= MIN_BASELINE_SESSIONS }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -552,9 +584,12 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- Innereien ---
 
-    private fun buildDashboard(list: List<SessionSummaryEntity>): DashboardState {
+    private fun buildDashboard(
+        list: List<SessionSummaryEntity>,
+        fallsById: Map<String, FallTally>,
+    ): DashboardState {
         val today = LocalDate.now(zone)
-        val facts = list.map { it.toFact() }
+        val facts = list.map { it.toFact(fallsById) }
         val weeks = bucket(facts, Period.WEEK, zone)
         val thisWeekStart = startOfPeriod(today, Period.WEEK)
         val totalHeight = facts.sumOf { it.climbHeightMeters ?: 0.0 }
@@ -635,7 +670,16 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     }
 }
 
-private fun SessionSummaryEntity.toFact() = SessionFact(
+/**
+ * Ab wann ein "Schnitt" einer ist.
+ *
+ * Zwei ist duenn, aber die Karte nennt die Anzahl - damit kann der Leser selbst
+ * einschaetzen, wie belastbar der Vergleich ist. Bei einer einzigen waere es
+ * schlicht die vorige Session unter falschem Namen.
+ */
+private const val MIN_BASELINE_SESSIONS = 2
+
+private fun SessionSummaryEntity.toFact(falls: Map<String, FallTally>) = SessionFact(
     startedAt = startedAt,
     attemptCount = attemptCount,
     sendCount = sendCount,
@@ -647,6 +691,8 @@ private fun SessionSummaryEntity.toFact() = SessionFact(
     hardestSendValue = hardestSendValue,
     hrAvg = hrAvg,
     hrMax = hrMax,
+    fallCount = falls[sessionId]?.falls ?: 0,
+    fallMeters = falls[sessionId]?.fallMeters ?: 0.0,
 )
 
 private fun AttemptEntity.toFact() = AttemptFact(

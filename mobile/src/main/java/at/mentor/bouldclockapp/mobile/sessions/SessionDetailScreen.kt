@@ -36,6 +36,7 @@ import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.text.attemptLabel
+import at.mentor.bouldclockapp.data.db.dao.SessionBaseline
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.GymEntity
 import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
@@ -92,6 +93,8 @@ fun SessionDetailScreen(
     problems: List<ProblemEntity>,
     /** Zonengrenzen in Schlaegen, aus dem Profil. */
     zoneBounds: List<Int>,
+    /** Der eigene Schnitt fuer vergleichbare Sessions, sofern es genug gibt. */
+    baseline: SessionBaseline?,
     actions: SessionDetailActions,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
@@ -147,6 +150,11 @@ fun SessionDetailScreen(
             item { SessionZoneCard(detail, zoneBounds) }
         }
 
+        if (baseline != null && detail.summary != null) {
+            item { SectionHeader("Im Vergleich", trailing = "${baseline.sessionCount} Sessions") }
+            item { BaselineCard(detail.summary, baseline) }
+        }
+
         item { SectionHeader("Halle") }
         item { GymCard(detail.gym, gyms, actions.onGymChange) }
 
@@ -199,6 +207,58 @@ fun SessionDetailScreen(
 
         item { DeleteSessionCard(actions.onDeleteSession) }
     }
+}
+
+/**
+ * Dieser Abend gegen den eigenen Schnitt.
+ *
+ * Verglichen wird nur mit vergleichbaren Sessions - gleicher Typ, gleiche
+ * Halle. Der Pfeil sagt die Richtung, nicht ob es gut war: mehr Versuche kann
+ * Volumen heissen oder dass nichts ging.
+ */
+@Composable
+private fun BaselineCard(summary: SessionSummaryEntity, baseline: SessionBaseline) {
+    BouldCard {
+        CompareRow("Versuche", summary.attemptCount.toDouble(), baseline.avgAttempts) {
+            it.roundToInt().toString()
+        }
+        CompareRow("Tops", summary.sendCount.toDouble(), baseline.avgSends) {
+            it.roundToInt().toString()
+        }
+        CompareRow("Wandzeit", summary.workMs.toDouble(), baseline.avgWorkMs) {
+            formatDurationWithUnit(it.toLong())
+        }
+        CompareRow("Pause", summary.restMs.toDouble(), baseline.avgRestMs) {
+            formatDurationWithUnit(it.toLong())
+        }
+        summary.hrr60Avg?.let { hrr ->
+            CompareRow("Erholung", hrr.toDouble(), baseline.avgHrr60) {
+                formatRecovery(it.roundToInt())
+            }
+        }
+        baseline.bestSendValue?.let { best ->
+            StatRow("Bester Top bisher", Grades.label(best, GradeSystem.FONT))
+        }
+    }
+}
+
+@Composable
+private fun CompareRow(
+    label: String,
+    value: Double,
+    average: Double?,
+    format: (Double) -> String,
+) {
+    if (average == null || average <= 0.0) {
+        StatRow(label, format(value))
+        return
+    }
+    val arrow = when {
+        value > average * 1.1 -> "↑"
+        value < average * 0.9 -> "↓"
+        else -> "≈"
+    }
+    StatRow(label, "${format(value)}  $arrow  Schnitt ${format(average)}")
 }
 
 /** Zonenverteilung dieses einen Abends. */

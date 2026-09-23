@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,10 +15,6 @@ import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,22 +28,23 @@ import at.mentor.bouldclockapp.core.text.sessionNoun
 import at.mentor.bouldclockapp.core.text.topNoun
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.mobile.DashboardState
+import at.mentor.bouldclockapp.mobile.LocalChartColors
 import at.mentor.bouldclockapp.mobile.detail.Metric
-import at.mentor.bouldclockapp.mobile.axisLabel
+import at.mentor.bouldclockapp.mobile.label
 import at.mentor.bouldclockapp.mobile.formatBpm
 import at.mentor.bouldclockapp.mobile.formatDurationShort
 import at.mentor.bouldclockapp.mobile.formatPerWeek
 import at.mentor.bouldclockapp.mobile.formatPercent
-import at.mentor.bouldclockapp.mobile.ui.ChartLegend
 import at.mentor.bouldclockapp.mobile.ui.StatRow
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.formatMeters
 import at.mentor.bouldclockapp.mobile.formatSessionDate
 import at.mentor.bouldclockapp.mobile.formatTimes
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
-import at.mentor.bouldclockapp.mobile.ui.ChartBar
-import at.mentor.bouldclockapp.mobile.ui.ColumnChart
-import at.mentor.bouldclockapp.mobile.ui.PointLineChart
+import at.mentor.bouldclockapp.mobile.ui.CardPair
+import at.mentor.bouldclockapp.mobile.ui.MetricTile
+import at.mentor.bouldclockapp.mobile.ui.SparkKind
+import at.mentor.bouldclockapp.mobile.ui.Sparkline
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
 import at.mentor.bouldclockapp.mobile.ui.SectionHeader
 import at.mentor.bouldclockapp.mobile.ui.StatTile
@@ -101,13 +99,8 @@ fun DashboardScreen(
         item { SectionHeader("Vergangene Woche") }
         item { LastWeekCard(state, onOpenHistory) }
 
-        item { SectionHeader("Letzte 8 Wochen", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
-        item { WeeksCard(state) { onOpenMetric(Metric.HEIGHT) } }
-
-        if (state.recentPulse.any { it.hrAvg != null }) {
-            item { SectionHeader("Puls je Woche", trailing = "antippen") { onOpenMetric(Metric.PULSE) } }
-            item { PulseCard(state) { onOpenMetric(Metric.PULSE) } }
-        }
+        item { SectionHeader("Letzte 8 Wochen", trailing = "je Kachel antippen") }
+        item { TrendTiles(state, onOpenMetric) }
     }
 }
 
@@ -159,24 +152,90 @@ private fun RatesCard(state: DashboardState, onOpen: () -> Unit) {
     }
 }
 
-/** Puls je Woche - Schnitt und Spitze. */
+/**
+ * Die vier Verlaeufe als Kacheln, zwei nebeneinander.
+ *
+ * Nebeneinander statt untereinander, weil vier Karten in voller Breite
+ * dreimal Scrollen bedeuten und man dann nie zwei Groessen zugleich sieht.
+ * Was die Kachel nicht zeigen kann - den Wert jeder einzelnen Woche -, zeigt
+ * das eigene Fenster hinter dem Tipper.
+ */
 @Composable
-private fun PulseCard(state: DashboardState, onOpen: () -> Unit) {
-    var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
-        PointLineChart(
-            bars = state.recentPulse.map {
-                ChartBar(axisLabel(it), (it.hrAvg ?: 0).toDouble(), (it.hrMax ?: 0).toDouble())
-            },
-            selectedIndex = selected,
-            onSelect = { selected = it },
-            valueFormat = { "${it.toInt()} bpm im Schnitt" },
-            highlightFormat = { "Spitze ${it.toInt()} bpm" },
-            emptyHint = "Noch kein Puls aufgezeichnet.",
-        )
-        ChartLegend(first = "Schnitt", second = "Spitze")
+private fun TrendTiles(state: DashboardState, onOpen: (Metric) -> Unit) {
+    val colors = LocalChartColors.current
+    val weeks = state.recentWeeks
+    if (weeks.isEmpty()) return
+
+    val attempts = weeks.sumOf { it.attemptCount }
+    val sends = weeks.sumOf { it.sendCount }
+    val pulseWeeks = weeks.mapNotNull { it.hrAvg }
+    val peak = weeks.mapNotNull { it.hrMax }.maxOrNull()
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        CardPair {
+            MetricTile(
+                title = "Höhenmeter",
+                value = formatMeters(weeks.sumOf { it.climbHeightMeters }),
+                caption = lastMeasured(weeks, { it.climbHeightMeters }) { formatMeters(it) }
+                    ?: "Noch keine Kletterhöhe gemessen.",
+                accent = colors.height.base,
+                onClick = { onOpen(Metric.HEIGHT) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                Sparkline(weeks.map { it.climbHeightMeters }, colors.height)
+            }
+
+            MetricTile(
+                title = "Versuche",
+                value = attempts.toString(),
+                caption = if (attempts > 0) "davon $sends ${topNoun(sends)}" else "In acht Wochen nichts.",
+                accent = colors.volume.base,
+                onClick = { onOpen(Metric.VOLUME) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                Sparkline(weeks.map { it.attemptCount.toDouble() }, colors.volume)
+            }
+        }
+
+        CardPair {
+            MetricTile(
+                title = "Kalorien",
+                value = formatKcal(weeks.sumOf { it.caloriesTotal }),
+                caption = lastMeasured(weeks, { it.caloriesTotal }) { formatKcal(it) }
+                    ?: "Dafür braucht es Puls und Profil.",
+                accent = colors.calories.base,
+                onClick = { onOpen(Metric.CALORIES) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                Sparkline(weeks.map { it.caloriesTotal }, colors.calories)
+            }
+
+            MetricTile(
+                title = "Puls",
+                value = pulseWeeks.average().takeIf { pulseWeeks.isNotEmpty() }
+                    ?.let { formatBpm(it.toInt()) } ?: "–",
+                caption = peak?.let { "Spitze ${formatBpm(it)}" } ?: "Noch kein Puls aufgezeichnet.",
+                accent = colors.pulse.base,
+                onClick = { onOpen(Metric.PULSE) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                Sparkline(
+                    values = weeks.map { (it.hrAvg ?: 0).toDouble() },
+                    palette = colors.pulse,
+                    kind = SparkKind.LINE,
+                )
+            }
+        }
     }
 }
+
+/** "KW 38: 17,1 m" - die letzte Woche, in der etwas gemessen wurde. */
+private fun lastMeasured(
+    weeks: List<at.mentor.bouldclockapp.core.metrics.PeriodBucket>,
+    value: (at.mentor.bouldclockapp.core.metrics.PeriodBucket) -> Double,
+    format: (Double) -> String,
+): String? = weeks.lastOrNull { value(it) > 0.0 }
+    ?.let { "${label(it)}: ${format(value(it))}" }
 
 /**
  * Der letzte Abend, ganz oben und anklickbar.
@@ -319,24 +378,6 @@ private fun LastWeekCard(state: DashboardState, onOpenHistory: () -> Unit) {
             text = "Zur Historie",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun WeeksCard(state: DashboardState, onOpen: () -> Unit) {
-    var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
-        ColumnChart(
-            bars = state.recentWeeks.map {
-                ChartBar(label = axisLabel(it), value = it.climbHeightMeters)
-            },
-            selectedIndex = selected,
-            onSelect = { selected = it },
-            valueFormat = { formatMeters(it) },
-            emptyHint = "Noch keine Kletterhöhe gemessen. Die kommt aus dem " +
-                "Luftdruck während der Versuche - beim ersten echten Abend " +
-                "steht hier ein Verlauf.",
         )
     }
 }

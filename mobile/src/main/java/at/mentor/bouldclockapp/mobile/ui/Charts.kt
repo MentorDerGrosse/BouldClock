@@ -26,10 +26,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import at.mentor.bouldclockapp.mobile.LocalChartColors
+import at.mentor.bouldclockapp.mobile.MetricColors
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.max
@@ -58,8 +61,31 @@ data class ChartBar(
 
 private val BAR_MAX_WIDTH = 24.dp
 private val BAR_GAP = 2.dp
-private val BAR_CORNER = 4.dp
+private val BAR_CORNER = 6.dp
 private val GRID_LINES = 3
+
+/**
+ * So viele Achsenbeschriftungen passen nebeneinander.
+ *
+ * Bei vierzehn Tagen stand frueher "21.9." vierzehnmal nebeneinander und alles
+ * ueberlappte. Lieber jede zweite oder dritte beschriften - eine Achse muss
+ * den Bereich zeigen, nicht jeden Punkt benennen.
+ */
+private const val MAX_AXIS_LABELS = 7
+
+/**
+ * Leert die Beschriftungen, die nicht mehr hinpassen.
+ *
+ * Die letzte bleibt immer stehen - das ist die, die man sucht -, und von dort
+ * wird rueckwaerts jede n-te behalten.
+ */
+private fun axisLabels(bars: List<ChartBar>, maxLabels: Int): List<String> {
+    if (bars.size <= maxLabels) return bars.map { it.label }
+    val step = (bars.size + maxLabels - 1) / maxLabels
+    return bars.indices.map { index ->
+        if ((bars.lastIndex - index) % step == 0) bars[index].label else ""
+    }
+}
 
 /**
  * Saeulendiagramm mit optionaler zweiter Reihe.
@@ -78,6 +104,10 @@ fun ColumnChart(
     valueFormat: (Double) -> String = { it.toInt().toString() },
     /** Beschriftung des hervorgehobenen Anteils, wenn es einen gibt. */
     highlightFormat: ((Double) -> String)? = null,
+    /** Die Farbe der Groesse - jedes Diagramm zeigt genau eine. */
+    palette: MetricColors? = null,
+    /** Halb so breit heisst halb so viele Beschriftungen - sonst ueberlappen sie. */
+    maxLabels: Int = MAX_AXIS_LABELS,
     emptyHint: String = "Für diesen Zeitraum noch nichts gemessen.",
 ) {
     if (bars.isEmpty()) return
@@ -95,11 +125,13 @@ fun ColumnChart(
     }
 
     val colors = LocalChartColors.current
+    val hue = palette ?: colors.volume
     val axisColor = MaterialTheme.colorScheme.onSurfaceVariant
     val labelStyle = MaterialTheme.typography.labelSmall
 
     val top = niceCeil(bars.maxOf { it.value })
     val peakIndex = bars.indices.maxByOrNull { bars[it].value } ?: 0
+    val labels = axisLabels(bars, maxLabels)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth().height(height)) {
@@ -133,7 +165,7 @@ fun ColumnChart(
                         width = barWidth,
                         barHeight = barHeight,
                         corner = corner,
-                        color = colors.series1.fade(dimmed),
+                        color = hue.base.fade(dimmed),
                     )
 
                     // Der hervorgehobene Anteil sitzt unten auf der Grundlinie,
@@ -145,7 +177,7 @@ fun ColumnChart(
                             .coerceAtLeast(0f)
                         if (highlightHeight > 0f) {
                             drawRect(
-                                color = colors.series2.fade(dimmed),
+                                color = hue.light.fade(dimmed),
                                 topLeft = Offset(left, size.height - highlightHeight),
                                 size = androidx.compose.ui.geometry.Size(barWidth, highlightHeight),
                             )
@@ -155,25 +187,15 @@ fun ColumnChart(
             }
         }
 
-        // Achse: Beschriftungen als Text unter der Zeichenflaeche, gleich
-        // verteilt wie die Saeulen. Im Bild gezeichneter Text muesste jede
-        // Schriftgroesse selbst nachbauen.
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            bars.forEachIndexed { index, bar ->
-                Text(
-                    text = bar.label,
-                    style = labelStyle,
-                    color = if (index == (selectedIndex ?: peakIndex)) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        axisColor
-                    },
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        // Achse: Beschriftungen als Text unter der Zeichenflaeche. Im Bild
+        // gezeichneter Text muesste jede Schriftgroesse selbst nachbauen.
+        AxisLabels(
+            labels = labels,
+            highlighted = selectedIndex ?: peakIndex,
+            style = labelStyle,
+            axisColor = axisColor,
+            modifier = Modifier.padding(top = 6.dp),
+        )
 
         // Der ausgewaehlte Balken im Klartext, mit **beiden** Reihen. Ohne das
         // bleibt ein zweifarbiger Balken huebsch und unlesbar: man sieht, dass
@@ -214,6 +236,8 @@ fun PointLineChart(
     onSelect: (Int?) -> Unit = {},
     valueFormat: (Double) -> String = { it.toInt().toString() },
     highlightFormat: ((Double) -> String)? = null,
+    palette: MetricColors? = null,
+    maxLabels: Int = MAX_AXIS_LABELS,
     emptyHint: String = "Für diesen Zeitraum noch nichts gemessen.",
 ) {
     val measured = bars.filter { it.value > 0.0 }
@@ -229,6 +253,7 @@ fun PointLineChart(
     }
 
     val colors = LocalChartColors.current
+    val hue = palette ?: colors.pulse
     val axisColor = MaterialTheme.colorScheme.onSurfaceVariant
     val labelStyle = MaterialTheme.typography.labelSmall
 
@@ -238,6 +263,7 @@ fun PointLineChart(
     val high = values.max() + 5
     val span = (high - low).coerceAtLeast(1.0)
     val peakIndex = bars.indices.maxByOrNull { bars[it].value } ?: 0
+    val labels = axisLabels(bars, maxLabels)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
@@ -265,7 +291,7 @@ fun PointLineChart(
             bars.indices.zipWithNext().forEach { (a, b) ->
                 if (bars[a].value > 0.0 && bars[b].value > 0.0) {
                     drawLine(
-                        color = colors.series1,
+                        color = hue.base,
                         start = pointOf(a, bars[a].value),
                         end = pointOf(b, bars[b].value),
                         strokeWidth = 2.dp.toPx(),
@@ -281,31 +307,24 @@ fun PointLineChart(
                 if (bar.highlight > 0.0) {
                     val top = pointOf(index, bar.highlight)
                     drawCircle(colors.surface, radius = 5.dp.toPx(), center = top)
-                    drawCircle(colors.series2, radius = 3.dp.toPx(), center = top)
+                    drawCircle(hue.light, radius = 3.dp.toPx(), center = top)
                 }
 
                 val point = pointOf(index, bar.value)
                 drawCircle(colors.surface, radius = if (chosen) 7.dp.toPx() else 6.dp.toPx(), center = point)
-                drawCircle(colors.series1, radius = if (chosen) 5.dp.toPx() else 4.dp.toPx(), center = point)
+                drawCircle(hue.base, radius = if (chosen) 5.dp.toPx() else 4.dp.toPx(), center = point)
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            bars.forEachIndexed { index, bar ->
-                Text(
-                    text = bar.label,
-                    style = labelStyle,
-                    color = if (index == (selectedIndex ?: peakIndex)) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        axisColor
-                    },
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        // Achse: Beschriftungen als Text unter der Zeichenflaeche. Im Bild
+        // gezeichneter Text muesste jede Schriftgroesse selbst nachbauen.
+        AxisLabels(
+            labels = labels,
+            highlighted = selectedIndex ?: peakIndex,
+            style = labelStyle,
+            axisColor = axisColor,
+            modifier = Modifier.padding(top = 6.dp),
+        )
 
         val shown = bars.getOrNull(selectedIndex ?: peakIndex)
         if (shown != null && shown.value > 0.0) {
@@ -336,9 +355,11 @@ fun GradePyramid(
     bars: List<ChartBar>,
     modifier: Modifier = Modifier,
     rowHeight: Dp = 26.dp,
+    palette: MetricColors? = null,
 ) {
     if (bars.none { it.value > 0.0 }) return
     val colors = LocalChartColors.current
+    val hue = palette ?: colors.volume
     val top = niceCeil(bars.maxOf { it.value })
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -362,14 +383,14 @@ fun GradePyramid(
                     val barHeight = size.height - 8.dp.toPx()
                     val y = (size.height - barHeight) / 2f
 
-                    drawBarHorizontal(0f, full, y, barHeight, corner, colors.series1)
+                    drawBarHorizontal(0f, full, y, barHeight, corner, hue.base)
 
                     if (bar.highlight > 0.0) {
                         val share = (bar.highlight / bar.value).coerceIn(0.0, 1.0)
                         val width = (full * share.toFloat() - BAR_GAP.toPx()).coerceAtLeast(0f)
                         if (width > 0f) {
                             drawRect(
-                                color = colors.series2,
+                                color = hue.light,
                                 topLeft = Offset(0f, y),
                                 size = androidx.compose.ui.geometry.Size(width, barHeight),
                             )
@@ -508,14 +529,28 @@ fun ChartLegend(
     first: String,
     second: String,
     modifier: Modifier = Modifier,
+    palette: MetricColors? = null,
+    /** In einer halb breiten Karte passen zwei Eintraege nicht nebeneinander. */
+    vertical: Boolean = false,
 ) {
     val colors = LocalChartColors.current
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        LegendEntry(colors.series1, first)
-        LegendEntry(colors.series2, second)
+    val hue = palette ?: colors.volume
+    if (vertical) {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            LegendEntry(hue.base, first)
+            LegendEntry(hue.light, second)
+        }
+    } else {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            LegendEntry(hue.base, first)
+            LegendEntry(hue.light, second)
+        }
     }
 }
 
@@ -532,6 +567,56 @@ private fun LegendEntry(color: Color, label: String) {
             // Nie in der Reihenfarbe: Farbe traegt der Punkt daneben.
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Die Achse unter einem Diagramm.
+ *
+ * Eigenes Layout statt einer Reihe gleich breiter Felder: bei zwoelf Wochen
+ * ist ein Feld zehn Punkte breit, und "39" wurde darin zu "3" abgeschnitten.
+ * Hier wird jede Beschriftung in ihrer natuerlichen Breite gemessen und ueber
+ * der Mitte ihrer Saeule abgesetzt - die leeren Nachbarn geben den Platz her.
+ * Am Rand rutscht sie so weit nach innen, dass sie ganz sichtbar bleibt.
+ */
+@Composable
+private fun AxisLabels(
+    labels: List<String>,
+    highlighted: Int,
+    style: androidx.compose.ui.text.TextStyle,
+    axisColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val chosenColor = MaterialTheme.colorScheme.onSurface
+    val shown = labels.indices.filter { labels[it].isNotEmpty() }
+
+    Layout(
+        modifier = modifier.fillMaxWidth(),
+        content = {
+            shown.forEach { index ->
+                Text(
+                    text = labels[index],
+                    style = style,
+                    color = if (index == highlighted) chosenColor else axisColor,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        },
+    ) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val width = constraints.maxWidth
+        val height = placeables.maxOfOrNull { it.height } ?: 0
+        val slot = width.toFloat() / labels.size.coerceAtLeast(1)
+
+        layout(width, height) {
+            placeables.forEachIndexed { position, placeable ->
+                val center = slot * shown[position] + slot / 2f
+                val x = (center - placeable.width / 2f).toInt()
+                    .coerceIn(0, (width - placeable.width).coerceAtLeast(0))
+                placeable.place(x, 0)
+            }
+        }
     }
 }
 
@@ -612,3 +697,89 @@ internal fun niceCeil(value: Double): Double {
 }
 
 private fun floorLog10(value: Double): Int = kotlin.math.floor(log10(abs(value))).toInt()
+
+/** Wie eine Miniatur gezeichnet wird: Saeulen fuer Mengen, Linie fuer Pegel. */
+enum class SparkKind { COLUMNS, LINE }
+
+/**
+ * Die Miniaturfassung - ohne Achse, ohne Auswahl, ohne Zahlen im Bild.
+ *
+ * Fuer die Kacheln der Uebersicht: nebeneinander ist kein Platz fuer zwoelf
+ * Beschriftungen, und die zwei Zahlen ueber und unter der Miniatur sagen mehr
+ * als zwoelf abgeschnittene. Der Verlauf zum Nachlesen steht eine Ebene
+ * tiefer im eigenen Fenster.
+ *
+ * Leere Zeitraeume bekommen einen Strich auf der Grundlinie statt gar nichts -
+ * sonst sieht eine Luecke aus wie ein Rand.
+ */
+@Composable
+fun Sparkline(
+    values: List<Double>,
+    palette: MetricColors,
+    modifier: Modifier = Modifier,
+    kind: SparkKind = SparkKind.COLUMNS,
+    height: Dp = 54.dp,
+) {
+    if (values.isEmpty()) return
+    val colors = LocalChartColors.current
+
+    Canvas(modifier = modifier.fillMaxWidth().height(height)) {
+        val stub = 2.dp.toPx()
+
+        when (kind) {
+            SparkKind.COLUMNS -> {
+                val top = niceCeil(values.max())
+                val slot = size.width / values.size
+                val barWidth = (slot - BAR_GAP.toPx()).coerceAtLeast(2f)
+                val corner = (barWidth / 2f).coerceAtMost(BAR_CORNER.toPx())
+
+                values.forEachIndexed { index, value ->
+                    val left = slot * index + (slot - barWidth) / 2f
+                    if (value <= 0.0) {
+                        drawColumn(left, barWidth, stub, stub / 2f, colors.grid)
+                    } else {
+                        val barHeight = ((value / top).toFloat() * size.height)
+                            .coerceAtLeast(stub)
+                        drawColumn(left, barWidth, barHeight, corner, palette.base)
+                    }
+                }
+            }
+
+            SparkKind.LINE -> {
+                // Der Pegel beginnt nicht bei null - sonst waere eine Kurve
+                // zwischen 110 und 140 bpm eine waagrechte Linie.
+                val measured = values.filter { it > 0.0 }
+                if (measured.isEmpty()) return@Canvas
+                val low = measured.min() - 3
+                val span = (measured.max() + 3 - low).coerceAtLeast(1.0)
+                val slot = size.width / values.size
+                val inset = 4.dp.toPx()
+
+                fun pointOf(index: Int, value: Double) = Offset(
+                    x = slot * index + slot / 2f,
+                    y = inset + (size.height - 2 * inset) *
+                        (1f - ((value - low) / span).toFloat()),
+                )
+
+                values.indices.zipWithNext().forEach { (a, b) ->
+                    if (values[a] > 0.0 && values[b] > 0.0) {
+                        drawLine(
+                            color = palette.base,
+                            start = pointOf(a, values[a]),
+                            end = pointOf(b, values[b]),
+                            strokeWidth = 2.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        )
+                    }
+                }
+
+                // Nur der letzte gemessene Punkt bekommt eine Marke: das ist
+                // der Wert, der in der Kachel darueber steht.
+                val lastIndex = values.indexOfLast { it > 0.0 }
+                val point = pointOf(lastIndex, values[lastIndex])
+                drawCircle(colors.surface, radius = 5.dp.toPx(), center = point)
+                drawCircle(palette.base, radius = 3.5f.dp.toPx(), center = point)
+            }
+        }
+    }
+}

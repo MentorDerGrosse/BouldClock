@@ -5,33 +5,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +38,6 @@ import at.mentor.bouldclockapp.mobile.profile.ProfileScreen
 import at.mentor.bouldclockapp.mobile.sessions.SessionDetailActions
 import at.mentor.bouldclockapp.mobile.sessions.SessionDetailScreen
 import at.mentor.bouldclockapp.mobile.sessions.SessionListScreen
-import kotlinx.coroutines.launch
 
 /** Die Ziele der Seitenleiste. */
 private enum class Destination(val title: String) {
@@ -83,8 +72,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BouldClockApp() {
     val viewModel: MobileViewModel = viewModel()
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
 
     var destination by remember { mutableStateOf(Destination.DASHBOARD) }
     var openSessionId by remember { mutableStateOf<String?>(null) }
@@ -106,8 +93,8 @@ private fun BouldClockApp() {
 
     fun go(target: Destination) {
         closeDetail()
+        closeMetric()
         destination = target
-        scope.launch { drawerState.close() }
     }
 
     BackHandler(
@@ -121,32 +108,22 @@ private fun BouldClockApp() {
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                DrawerHeader()
-                Destination.entries.forEach { target ->
-                    NavigationDrawerItem(
-                        label = { Text(target.title) },
-                        selected = target == destination && openSessionId == null,
-                        onClick = { go(target) },
-                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    )
-                }
-            }
-        },
-    ) {
-        Scaffold(
-            topBar = {
+    // Reiter oben statt Schublade an der Seite: sechs Ziele, die man staendig
+    // wechselt, gehoeren sichtbar - eine Schublade versteckt sie hinter einem
+    // zusaetzlichen Tipper und laesst nie erkennen, wo man gerade ist.
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Column {
                 TopAppBar(
                     title = {
                         Text(
-                            when {
+                            text = when {
                                 openSessionId != null -> "Session"
                                 openMetric != null -> openMetric!!.title
-                                else -> destination.title
+                                else -> "BouldClock"
                             },
+                            fontWeight = FontWeight.SemiBold,
                         )
                     },
                     navigationIcon = {
@@ -156,17 +133,42 @@ private fun BouldClockApp() {
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück")
                             }
-                        } else {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, "Menü")
-                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,
                     ),
                 )
-            },
+
+                // In einem Detailfenster keine Reiter - dort fuehrt der Weg
+                // zurueck, nicht zur Seite.
+                if (openSessionId == null && openMetric == null) {
+                    ScrollableTabRow(
+                        selectedTabIndex = destination.ordinal,
+                        containerColor = MaterialTheme.colorScheme.background,
+                        edgePadding = 12.dp,
+                        divider = {},
+                    ) {
+                        Destination.entries.forEach { target ->
+                            Tab(
+                                selected = target == destination,
+                                onClick = { go(target) },
+                                text = {
+                                    Text(
+                                        text = target.title,
+                                        fontWeight = if (target == destination) {
+                                            FontWeight.SemiBold
+                                        } else {
+                                            FontWeight.Normal
+                                        },
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        },
         ) { padding ->
             if (openSessionId != null) {
                 DetailRoute(viewModel, openSessionId!!, padding, ::closeDetail)
@@ -263,7 +265,6 @@ private fun BouldClockApp() {
                 }
             }
         }
-    }
 }
 
 @Composable
@@ -277,12 +278,14 @@ private fun DetailRoute(
     val gyms by viewModel.gyms.collectAsStateWithLifecycle()
     val problems by viewModel.problems.collectAsStateWithLifecycle()
     val zoneBounds by viewModel.zoneBounds.collectAsStateWithLifecycle()
+    val baseline by viewModel.baseline.collectAsStateWithLifecycle()
 
     SessionDetailScreen(
         detail = detail,
         gyms = gyms,
         problems = problems,
         zoneBounds = zoneBounds,
+        baseline = baseline,
         modifier = Modifier.padding(padding),
         actions = SessionDetailActions(
             onRpeChange = { viewModel.setRpe(sessionId, it) },
@@ -306,22 +309,4 @@ private fun DetailRoute(
             },
         ),
     )
-}
-
-@Composable
-private fun DrawerHeader() {
-    Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-        Text(
-            text = "BouldClock",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            text = "Bouldern mitschreiben",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    Spacer(modifier = Modifier.height(8.dp))
 }

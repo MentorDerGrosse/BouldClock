@@ -28,6 +28,8 @@ import at.mentor.bouldclockapp.core.model.Grades
 import at.mentor.bouldclockapp.core.text.attemptLabel
 import at.mentor.bouldclockapp.core.text.topNoun
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
+import at.mentor.bouldclockapp.mobile.LocalChartColors
+import at.mentor.bouldclockapp.mobile.MetricColors
 import at.mentor.bouldclockapp.mobile.axisLabel
 import at.mentor.bouldclockapp.mobile.formatBpm
 import at.mentor.bouldclockapp.mobile.formatKcal
@@ -37,6 +39,7 @@ import at.mentor.bouldclockapp.mobile.formatTime
 import at.mentor.bouldclockapp.mobile.label
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
 import at.mentor.bouldclockapp.mobile.ui.ChartBar
+import at.mentor.bouldclockapp.mobile.ui.ChartCard
 import at.mentor.bouldclockapp.mobile.ui.ChartLegend
 import at.mentor.bouldclockapp.mobile.ui.ColumnChart
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
@@ -65,6 +68,7 @@ fun MetricDetailScreen(
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
     var selected by remember(metric, period) { mutableStateOf<Int?>(null) }
+    val palette = metric.palette()
     val bars = buckets.map { metric.barOf(it) }
     val chosen = buckets.getOrNull(selected ?: buckets.indexOfFirst { it.sessionCount > 0 }
         .takeIf { it >= 0 } ?: -1)
@@ -85,7 +89,7 @@ fun MetricDetailScreen(
             }
         } else if (!period.isSingleBucket) {
             item {
-                BouldCard {
+                ChartCard(title = metric.title, accent = palette.base, trailing = metric.unit) {
                     if (metric.isLevel) {
                         PointLineChart(
                             bars = bars,
@@ -93,6 +97,7 @@ fun MetricDetailScreen(
                             onSelect = { selected = it },
                             valueFormat = metric.valueFormat,
                             highlightFormat = metric.highlightFormat,
+                            palette = palette,
                         )
                     } else {
                         ColumnChart(
@@ -101,9 +106,12 @@ fun MetricDetailScreen(
                             onSelect = { selected = it },
                             valueFormat = metric.valueFormat,
                             highlightFormat = metric.highlightFormat,
+                            palette = palette,
                         )
                     }
-                    metric.legend?.let { (a, b) -> ChartLegend(first = a, second = b) }
+                    metric.legend?.let { (a, b) ->
+                        ChartLegend(first = a, second = b, palette = palette)
+                    }
                 }
             }
         }
@@ -181,6 +189,14 @@ private fun BucketSummary(metric: Metric, bucket: PeriodBucket) {
                 bucket.hrMax?.let { StatRow("Spitze", formatBpm(it)) }
                 StatRow("Sessions", bucket.sessionCount.toString())
             }
+
+            Metric.FALLS -> {
+                StatRow("Stürze", bucket.fallCount.toString())
+                StatRow("Gefallen", formatMeters(bucket.fallMeters))
+                if (bucket.fallCount > 0) {
+                    StatRow("Im Schnitt", formatMeters(bucket.fallMeters / bucket.fallCount))
+                }
+            }
         }
     }
 }
@@ -207,7 +223,7 @@ private fun SessionRow(metric: Metric, summary: SessionSummaryEntity, onClick: (
             Text(
                 text = metric.sessionValue(summary),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -231,6 +247,19 @@ private fun PeriodPicker(selected: Period, onSelect: (Period) -> Unit) {
     }
 }
 
+/** Jede Groesse hat ihre Farbe - dieselbe in der ganzen App. */
+@Composable
+private fun Metric.palette(): MetricColors {
+    val colors = LocalChartColors.current
+    return when (this) {
+        Metric.HEIGHT -> colors.height
+        Metric.VOLUME -> colors.volume
+        Metric.CALORIES -> colors.calories
+        Metric.PULSE -> colors.pulse
+        Metric.FALLS -> colors.falls
+    }
+}
+
 // --- Was die einzelne Groesse aus einem Zeitraum liest ---
 
 private fun Metric.barOf(bucket: PeriodBucket): ChartBar = when (this) {
@@ -246,6 +275,7 @@ private fun Metric.barOf(bucket: PeriodBucket): ChartBar = when (this) {
         value = (bucket.hrAvg ?: 0).toDouble(),
         highlight = (bucket.hrMax ?: 0).toDouble(),
     )
+    Metric.FALLS -> ChartBar(axisLabel(bucket), bucket.fallMeters)
 }
 
 private val Metric.valueFormat: (Double) -> String
@@ -254,6 +284,7 @@ private val Metric.valueFormat: (Double) -> String
         Metric.VOLUME -> { v -> "${v.toInt()} Versuche" }
         Metric.CALORIES -> { v -> formatKcal(v) }
         Metric.PULSE -> { v -> "${v.toInt()} bpm im Schnitt" }
+        Metric.FALLS -> { v -> "${formatMeters(v)} gefallen" }
     }
 
 private val Metric.highlightFormat: ((Double) -> String)?
@@ -275,4 +306,7 @@ private fun Metric.sessionValue(summary: SessionSummaryEntity): String = when (t
     Metric.VOLUME -> "${summary.attemptCount} / ${summary.sendCount}"
     Metric.CALORIES -> summary.caloriesTotal?.let { formatKcal(it) } ?: "–"
     Metric.PULSE -> summary.hrAvg?.let { formatBpm(it) } ?: "–"
+    // Die Sturzzahl steckt nicht in der Zusammenfassung - hier steht deshalb,
+    // was am ehesten passt.
+    Metric.FALLS -> summary.climbHeightMeters?.let { formatMeters(it) } ?: "–"
 }

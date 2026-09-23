@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.LandmarksTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:49:20.852Z" hostname="fedora" time="0.005">
+<testsuite name="at.mentor.bouldclockapp.core.LandmarksTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-23T00:46:20.231Z" hostname="fedora" time="0.006">
   <properties/>
   <testcase name="unter dem kleinsten Bauwerk gibt es noch keinen Vergleich" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.001"/>
-  <testcase name="Fortschritt zum naechsten Ziel liegt zwischen null und eins" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.002"/>
-  <testcase name="das groesste passende Bauwerk gewinnt" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.001"/>
+  <testcase name="Fortschritt zum naechsten Ziel liegt zwischen null und eins" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.004"/>
+  <testcase name="das groesste passende Bauwerk gewinnt" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.0"/>
   <testcase name="die Leiter steigt lueckenlos an" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.001"/>
   <testcase name="ueber dem hoechsten Berg gibt es kein naechstes Ziel" classname="at.mentor.bouldclockapp.core.LandmarksTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

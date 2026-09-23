@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.AttemptRunsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:49:20.780Z" hostname="fedora" time="0.027">
+<testsuite name="at.mentor.bouldclockapp.core.AttemptRunsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-23T00:46:20.151Z" hostname="fedora" time="0.029">
   <properties/>
-  <testcase name="Versuche zwischen zwei Grenzen sind ein Boulder" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.02"/>
-  <testcase name="ohne Versuche gibt es keine Gruppen" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.001"/>
+  <testcase name="Versuche zwischen zwei Grenzen sind ein Boulder" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.019"/>
+  <testcase name="ohne Versuche gibt es keine Gruppen" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.002"/>
   <testcase name="ohne Grade traegt allein die Grenze" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.0"/>
   <testcase name="zwei Boulder mit gleichem Grad bleiben getrennt" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.0"/>
-  <testcase name="Wandzeit und Maximalpuls werden ueber die Gruppe zusammengezogen" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.0"/>
+  <testcase name="Wandzeit und Maximalpuls werden ueber die Gruppe zusammengezogen" classname="at.mentor.bouldclockapp.core.AttemptRunsTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
