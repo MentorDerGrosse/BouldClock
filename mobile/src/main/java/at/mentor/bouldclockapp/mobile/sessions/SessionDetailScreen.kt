@@ -50,7 +50,10 @@ import at.mentor.bouldclockapp.mobile.formatRecovery
 import at.mentor.bouldclockapp.mobile.ui.TrendLine
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.formatMeters
+import at.mentor.bouldclockapp.core.metrics.HeartRateZone
+import at.mentor.bouldclockapp.mobile.LocalChartColors
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
+import at.mentor.bouldclockapp.mobile.ui.StackedShareBar
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
 import at.mentor.bouldclockapp.mobile.ui.SectionHeader
 import at.mentor.bouldclockapp.mobile.ui.StatRow
@@ -87,6 +90,8 @@ fun SessionDetailScreen(
     detail: SessionDetail?,
     gyms: List<GymEntity>,
     problems: List<ProblemEntity>,
+    /** Zonengrenzen in Schlaegen, aus dem Profil. */
+    zoneBounds: List<Int>,
     actions: SessionDetailActions,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
@@ -113,7 +118,7 @@ fun SessionDetailScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { StatsCard(detail.summary, attemptNumbers.size) }
+        item { StatsCard(detail.summary, attemptNumbers.size, visibleAttempts) }
 
         if (detail.heartBeats.size >= 2) {
             item { SectionHeader("Pulsverlauf", trailing = pulseRange(detail)) }
@@ -135,6 +140,11 @@ fun SessionDetailScreen(
                     )
                 }
             }
+
+            // Dieselben Zonen wie in der Historie, aber nur fuer diesen Abend -
+            // das ist der Filter "nach Session".
+            item { SectionHeader("Zeit in Pulszonen") }
+            item { SessionZoneCard(detail, zoneBounds) }
         }
 
         item { SectionHeader("Halle") }
@@ -191,6 +201,42 @@ fun SessionDetailScreen(
     }
 }
 
+/** Zonenverteilung dieses einen Abends. */
+@Composable
+private fun SessionZoneCard(detail: SessionDetail, bounds: List<Int>) {
+    if (bounds.size < HeartRateZone.entries.size - 1) return
+    val ramp = LocalChartColors.current.zoneRamp
+
+    val seconds = HeartRateZone.entries.associateWith { 0L }.toMutableMap()
+    detail.heartBeats.zipWithNext().forEach { (a, b) ->
+        val span = (b.timestampMs - a.timestampMs).coerceIn(0L, 5_000L)
+        val index = bounds.count { b.bpm >= it }
+        val zone = HeartRateZone.entries[index]
+        seconds[zone] = (seconds[zone] ?: 0L) + span
+    }
+    if (seconds.values.sum() <= 0L) return
+
+    BouldCard {
+        StackedShareBar(
+            parts = HeartRateZone.entries.mapIndexed { index, zone ->
+                Triple(zoneLabel(zone, index, bounds), seconds.getValue(zone), ramp[index])
+            },
+            valueFormat = { formatDurationWithUnit(it) },
+        )
+    }
+}
+
+private fun zoneLabel(zone: HeartRateZone, index: Int, bounds: List<Int>): String {
+    val from = if (index == 0) null else bounds[index - 1]
+    val to = bounds.getOrNull(index)
+    return when {
+        from == null && to != null -> "${zone.displayName} (unter $to)"
+        from != null && to != null -> "${zone.displayName} ($from–${to - 1})"
+        from != null -> "${zone.displayName} (ab $from)"
+        else -> zone.displayName
+    }
+}
+
 /** Die Pause zwischen zwei Versuchen - schmal, damit sie die Liste nicht dominiert. */
 @Composable
 private fun RestRow(restMs: Long) {
@@ -218,9 +264,24 @@ private fun pulseRange(detail: SessionDetail): String {
 }
 
 @Composable
-private fun StatsCard(summary: SessionSummaryEntity?, attemptCount: Int) {
+private fun StatsCard(
+    summary: SessionSummaryEntity?,
+    attemptCount: Int,
+    attempts: List<AttemptEntity>,
+) {
+    // Stuerze sind protokollierte Fehlversuche - nicht aus dem
+    // Beschleunigungssensor erkannt, das kommt spaeter.
+    val falls = attempts.filter { it.kind.isAttempt && it.outcome == AttemptOutcome.FAIL }
+    val deepestFall = falls.mapNotNull { it.climbHeightMeters }.maxOrNull()
+
     BouldCard {
         StatRow("Versuche", attemptLabel(attemptCount))
+        if (falls.isNotEmpty()) {
+            StatRow("Stürze", falls.size.toString())
+            // Bei einem Sturz faellt man vom hoechsten Punkt - die gemessene
+            // Kletterhoehe *ist* die Fallhoehe, sie heisst nur anders.
+            deepestFall?.let { StatRow("Tiefster Sturz", formatMeters(it)) }
+        }
         summary?.let {
             StatRow("Tops", "${it.sendCount} · ${it.flashCount} Flash")
             StatRow("Dauer", formatDurationWithUnit(it.totalMs))
@@ -661,7 +722,10 @@ private fun summarize(attempt: AttemptEntity): String = listOfNotNull(
     attempt.boardAngleDegrees?.let { BoardAngles.format(it) },
     attempt.outcome?.displayName,
     attempt.topMoveReached?.let { "bis Zug $it" },
-    attempt.climbHeightMeters?.let { formatMeters(it) },
+    attempt.climbHeightMeters?.let {
+        // Wer gestuerzt ist, ist von genau dieser Hoehe gefallen.
+        if (attempt.outcome == AttemptOutcome.FAIL) "${formatMeters(it)} gefallen" else formatMeters(it)
+    },
 ).joinToString(" · ").ifEmpty { "ohne Angabe" }
 
 private const val ANGLE_STEP = 5

@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -71,6 +72,11 @@ fun ProfileScreen(
     var restingHr by remember(profile) {
         mutableIntStateOf(profile?.restingHrBpm ?: DEFAULT_RESTING_HR)
     }
+    // Getrennt vom Wert: ein Schieberegler steht immer irgendwo, und "steht
+    // irgendwo" ist kein gemessener Ruhepuls. Ohne diese Unterscheidung hat
+    // das blosse Speichern des Profils eine Schaetzung zur Messung gemacht -
+    // und die Uhr fragte danach nie wieder nach.
+    var restingHrKnown by remember(profile) { mutableStateOf(profile?.restingHrBpm != null) }
 
     Column(
         modifier = modifier
@@ -116,20 +122,40 @@ fun ProfileScreen(
 
         SectionHeader("Herz")
         BouldCard {
-            ValueSlider(
+            StatRow(
                 label = "Ruhepuls",
-                value = "$restingHr bpm",
-                position = restingHr.toFloat(),
-                range = MIN_RESTING_HR.toFloat()..MAX_RESTING_HR.toFloat(),
-                onChange = { restingHr = it.roundToInt() },
+                value = if (restingHrKnown) "$restingHr bpm" else "nicht gemessen",
             )
             Text(
                 text = "Der wichtigste Wert für die Kalorien: er geht doppelt ein – " +
                     "in die Pulsreserve und in die daraus geschätzte Ausdauer. " +
-                    "Genauer als schätzen ist „Ruhepuls messen“ auf der Uhr.",
+                    "Am genauesten misst ihn die Uhr unter „Ruhepuls messen“; " +
+                    "ohne Messung rechnet die App mit ${DEFAULT_RESTING_HR} bpm weiter.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Selbst eintragen", style = MaterialTheme.typography.bodyMedium)
+                Switch(
+                    checked = restingHrKnown,
+                    onCheckedChange = { restingHrKnown = it },
+                )
+            }
+            if (restingHrKnown) {
+                ValueSlider(
+                    label = "Ruhepuls",
+                    value = "$restingHr bpm",
+                    position = restingHr.toFloat(),
+                    range = MIN_RESTING_HR.toFloat()..MAX_RESTING_HR.toFloat(),
+                    onChange = { restingHr = it.roundToInt() },
+                )
+            }
+
             StatRow(
                 label = "Höchster gemessener Puls",
                 value = profile?.maxHrBpm?.let { "$it bpm" } ?: "noch keiner",
@@ -137,7 +163,7 @@ fun ProfileScreen(
         }
 
         Button(
-            onClick = { onSave(weight, age, sex, height, restingHr) },
+            onClick = { onSave(weight, age, sex, height, restingHr.takeIf { restingHrKnown }) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Speichern") }
 

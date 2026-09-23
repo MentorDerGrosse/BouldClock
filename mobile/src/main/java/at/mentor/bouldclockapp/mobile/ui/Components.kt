@@ -1,5 +1,6 @@
 package at.mentor.bouldclockapp.mobile.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,10 +35,19 @@ fun SectionHeader(
     text: String,
     modifier: Modifier = Modifier,
     trailing: String? = null,
+    /**
+     * Macht die Ueberschrift zum Ziel.
+     *
+     * Nicht die Karte darunter: Diagramme fangen Tipper selbst ab, um einen
+     * Balken auszuwaehlen. Zwei Bedeutungen auf derselben Flaeche waeren ein
+     * Wettlauf, den der Nutzer verliert.
+     */
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(top = 20.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
@@ -52,7 +62,11 @@ fun SectionHeader(
             Text(
                 text = it,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (onClick != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
     }

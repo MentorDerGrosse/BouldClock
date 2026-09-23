@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.HeartRateZonesTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.498Z" hostname="fedora" time="0.004">
+<testsuite name="at.mentor.bouldclockapp.core.HeartRateZonesTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:49:20.843Z" hostname="fedora" time="0.003">
   <properties/>
   <testcase name="ohne sinnvolle Spanne faellt alles in Ruhe" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.001"/>
   <testcase name="die Grenze in Schlaegen laesst sich beschriften" classname="at.mentor.bouldclockapp.core.HeartRateZonesTest" time="0.0"/>

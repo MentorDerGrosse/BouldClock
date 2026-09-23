@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.core.RestingHeartRateTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.564Z" hostname="fedora" time="0.0">
+<testsuite name="at.mentor.bouldclockapp.core.RestingHeartRateTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:49:20.919Z" hostname="fedora" time="0.001">
   <properties/>
-  <testcase name="die niedrige Phase zaehlt, nicht der Durchschnitt" classname="at.mentor.bouldclockapp.core.RestingHeartRateTest" time="0.0"/>
+  <testcase name="die niedrige Phase zaehlt, nicht der Durchschnitt" classname="at.mentor.bouldclockapp.core.RestingHeartRateTest" time="0.001"/>
   <testcase name="bei ruhiger Messung kommt der ruhige Wert heraus" classname="at.mentor.bouldclockapp.core.RestingHeartRateTest" time="0.0"/>
   <testcase name="ein einzelner Ausreisser nach unten zieht nicht" classname="at.mentor.bouldclockapp.core.RestingHeartRateTest" time="0.0"/>
   <testcase name="zu wenige Werte ergeben keinen Ruhepuls" classname="at.mentor.bouldclockapp.core.RestingHeartRateTest" time="0.0"/>

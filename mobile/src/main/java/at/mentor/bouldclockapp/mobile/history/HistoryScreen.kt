@@ -1,6 +1,8 @@
 package at.mentor.bouldclockapp.mobile.history
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +31,7 @@ import at.mentor.bouldclockapp.core.text.topNoun
 import at.mentor.bouldclockapp.data.db.dao.GradeBucket
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.mobile.axisLabel
+import at.mentor.bouldclockapp.mobile.detail.Metric
 import at.mentor.bouldclockapp.mobile.formatDurationShort
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.LocalChartColors
@@ -39,7 +42,10 @@ import at.mentor.bouldclockapp.mobile.label
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
 import at.mentor.bouldclockapp.mobile.ui.ChartBar
 import at.mentor.bouldclockapp.mobile.ui.ChartLegend
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import at.mentor.bouldclockapp.mobile.ui.ColumnChart
+import at.mentor.bouldclockapp.mobile.ui.PointLineChart
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
 import at.mentor.bouldclockapp.mobile.ui.GradePyramid
 import at.mentor.bouldclockapp.mobile.ui.SectionHeader
@@ -62,8 +68,10 @@ fun HistoryScreen(
     grades: List<GradeBucket>,
     hrr60: List<Hrr60Point>,
     zones: Map<HeartRateZone, Int>,
+    zoneBounds: List<Int>,
     totals: PeriodBucket?,
     onSelectPeriod: (Period) -> Unit,
+    onOpenMetric: (Metric) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
@@ -94,24 +102,24 @@ fun HistoryScreen(
         // Bei "Gesamt" gibt es nur einen Eimer - ein einzelner Balken ist kein
         // Diagramm. Dann stehen oben die Kennzahlen und hier nichts.
         if (!period.isSingleBucket) {
-            item { SectionHeader("Höhenmeter je ${period.singular()}") }
+            item { SectionHeader("Höhenmeter je ${period.singular()}", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
             item { HeightChartCard(buckets) }
 
-            item { SectionHeader("Volumen") }
+            item { SectionHeader("Volumen", trailing = "antippen") { onOpenMetric(Metric.VOLUME) } }
             item { VolumeChartCard(buckets) }
 
-            item { SectionHeader("Kalorien") }
+            item { SectionHeader("Kalorien", trailing = "antippen") { onOpenMetric(Metric.CALORIES) } }
             item { CalorieChartCard(buckets) }
 
             if (buckets.any { it.hrAvg != null }) {
-                item { SectionHeader("Puls im Schnitt", trailing = "je ${period.singular()}") }
+                item { SectionHeader("Puls im Schnitt", trailing = "antippen") { onOpenMetric(Metric.PULSE) } }
                 item { PulseChartCard(buckets) }
             }
         }
 
         if (zones.isNotEmpty()) {
             item { SectionHeader("Zeit in Pulszonen") }
-            item { ZoneCard(zones) }
+            item { ZoneCard(zones, zoneBounds) }
         }
 
         if (grades.isNotEmpty()) {
@@ -202,12 +210,12 @@ private fun TotalsCard(totals: PeriodBucket) {
  * sondern die Sportart. Interessant ist der Anteil oben.
  */
 @Composable
-private fun ZoneCard(zones: Map<HeartRateZone, Int>) {
+private fun ZoneCard(zones: Map<HeartRateZone, Int>, bounds: List<Int>) {
     val ramp = LocalChartColors.current.zoneRamp
     BouldCard {
         StackedShareBar(
             parts = HeartRateZone.entries.mapIndexed { index, zone ->
-                Triple(zone.displayName, (zones[zone] ?: 0).toLong(), ramp[index])
+                Triple(zoneLabel(zone, index, bounds), (zones[zone] ?: 0).toLong(), ramp[index])
             },
             valueFormat = { formatDurationWithUnit(it * 1000L) },
         )
@@ -247,7 +255,7 @@ private fun CalorieChartCard(buckets: List<PeriodBucket>) {
 private fun PulseChartCard(buckets: List<PeriodBucket>) {
     var selected by remember { mutableStateOf<Int?>(null) }
     BouldCard {
-        ColumnChart(
+        PointLineChart(
             bars = buckets.map {
                 ChartBar(axisLabel(it), (it.hrAvg ?: 0).toDouble(), (it.hrMax ?: 0).toDouble())
             },
@@ -262,8 +270,10 @@ private fun PulseChartCard(buckets: List<PeriodBucket>) {
 
 @Composable
 private fun PeriodPicker(selected: Period, onSelect: (Period) -> Unit) {
+    // Scrollbar, weil fuenf Zeitraeume auf einem Telefon nicht nebeneinander
+    // passen - "Gesamt" fiel sonst hinten raus.
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Period.entries.forEach { period ->
@@ -312,6 +322,24 @@ private fun VolumeChartCard(buckets: List<PeriodBucket>) {
 }
 
 /**
+ * Zonenname mit dem Bereich in Schlaegen.
+ *
+ * Ohne die Zahlen ist "Tempo" ein Wort ohne Bezug - man weiss nicht, ob man
+ * gerade drin war.
+ */
+private fun zoneLabel(zone: HeartRateZone, index: Int, bounds: List<Int>): String {
+    if (bounds.size < HeartRateZone.entries.size - 1) return zone.displayName
+    val from = if (index == 0) null else bounds[index - 1]
+    val to = bounds.getOrNull(index)
+    return when {
+        from == null && to != null -> "${zone.displayName} (unter $to)"
+        from != null && to != null -> "${zone.displayName} ($from–${to - 1})"
+        from != null -> "${zone.displayName} (ab $from)"
+        else -> zone.displayName
+    }
+}
+
+/**
  * Die Gradpyramide.
  *
  * Wie viele Versuche je Grad, und wie viele davon durchgingen. Die Form
@@ -320,17 +348,51 @@ private fun VolumeChartCard(buckets: List<PeriodBucket>) {
  */
 @Composable
 private fun PyramidCard(grades: List<GradeBucket>) {
+    // Zwei Blickwinkel auf dieselben Daten: wie viel probiert, oder wie viel
+    // steht. Das Zweite ist die Zahl, die man Freunden sagt.
+    var onlySends by remember { mutableStateOf(false) }
+
     BouldCard {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !onlySends,
+                onClick = { onlySends = false },
+                label = { Text("Versuche") },
+            )
+            FilterChip(
+                selected = onlySends,
+                onClick = { onlySends = true },
+                label = { Text("Nur Tops") },
+            )
+        }
+
+        val relevant = grades
+            .filter { if (onlySends) it.sendCount > 0 else it.attemptCount > 0 }
+            .sortedByDescending { it.gradeValue }
+
         GradePyramid(
-            bars = grades.sortedByDescending { it.gradeValue }.map {
+            bars = relevant.map {
                 ChartBar(
                     label = Grades.label(it.gradeValue, GradeSystem.FONT),
-                    value = it.attemptCount.toDouble(),
-                    highlight = it.sendCount.toDouble(),
+                    value = if (onlySends) it.sendCount.toDouble() else it.attemptCount.toDouble(),
+                    highlight = if (onlySends) it.flashCount.toDouble() else it.sendCount.toDouble(),
                 )
             },
         )
-        ChartLegend(first = "Versuche", second = "davon Tops")
+        ChartLegend(
+            first = if (onlySends) "Tops" else "Versuche",
+            second = if (onlySends) "davon Flash" else "davon Tops",
+        )
+        Text(
+            text = if (onlySends) {
+                "${relevant.sumOf { it.sendCount }} Boulder insgesamt durchgestiegen, " +
+                    "härtester ${Grades.label(relevant.first().gradeValue, GradeSystem.FONT)}."
+            } else {
+                "${relevant.sumOf { it.attemptCount }} Versuche über alle Sessions."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

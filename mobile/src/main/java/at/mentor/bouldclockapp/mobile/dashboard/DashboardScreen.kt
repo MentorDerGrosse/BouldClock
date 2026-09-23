@@ -31,6 +31,7 @@ import at.mentor.bouldclockapp.core.text.sessionNoun
 import at.mentor.bouldclockapp.core.text.topNoun
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.mobile.DashboardState
+import at.mentor.bouldclockapp.mobile.detail.Metric
 import at.mentor.bouldclockapp.mobile.axisLabel
 import at.mentor.bouldclockapp.mobile.formatBpm
 import at.mentor.bouldclockapp.mobile.formatDurationShort
@@ -45,6 +46,7 @@ import at.mentor.bouldclockapp.mobile.formatTimes
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
 import at.mentor.bouldclockapp.mobile.ui.ChartBar
 import at.mentor.bouldclockapp.mobile.ui.ColumnChart
+import at.mentor.bouldclockapp.mobile.ui.PointLineChart
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
 import at.mentor.bouldclockapp.mobile.ui.SectionHeader
 import at.mentor.bouldclockapp.mobile.ui.StatTile
@@ -63,6 +65,7 @@ fun DashboardScreen(
     readiness: Readiness,
     onOpenSession: (String) -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenMetric: (Metric) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
@@ -89,21 +92,21 @@ fun DashboardScreen(
             )
         }
 
-        item { SectionHeader("Insgesamt", trailing = "antippen") }
-        item { RatesCard(state, onOpenHistory) }
+        item { SectionHeader("Insgesamt", trailing = "antippen") { onOpenMetric(Metric.VOLUME) } }
+        item { RatesCard(state) { onOpenMetric(Metric.VOLUME) } }
 
-        item { SectionHeader("Höhenmeter") }
-        item { HeightCard(state, onOpenHistory) }
+        item { SectionHeader("Höhenmeter", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
+        item { HeightCard(state) { onOpenMetric(Metric.HEIGHT) } }
 
         item { SectionHeader("Vergangene Woche") }
         item { LastWeekCard(state, onOpenHistory) }
 
-        item { SectionHeader("Letzte 8 Wochen", trailing = "antippen") }
-        item { WeeksCard(state, onOpenHistory) }
+        item { SectionHeader("Letzte 8 Wochen", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
+        item { WeeksCard(state) { onOpenMetric(Metric.HEIGHT) } }
 
         if (state.recentPulse.any { it.hrAvg != null }) {
-            item { SectionHeader("Puls je Woche", trailing = "antippen") }
-            item { PulseCard(state, onOpenHistory) }
+            item { SectionHeader("Puls je Woche", trailing = "antippen") { onOpenMetric(Metric.PULSE) } }
+            item { PulseCard(state) { onOpenMetric(Metric.PULSE) } }
         }
     }
 }
@@ -142,8 +145,8 @@ private fun ReadinessCard(readiness: Readiness) {
 
 /** Quoten und Trainingshäufigkeit über alles - die Zahlen zum Angeben. */
 @Composable
-private fun RatesCard(state: DashboardState, onOpenHistory: () -> Unit) {
-    BouldCard(modifier = Modifier.clickable(onClick = onOpenHistory)) {
+private fun RatesCard(state: DashboardState, onOpen: () -> Unit) {
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -158,10 +161,10 @@ private fun RatesCard(state: DashboardState, onOpenHistory: () -> Unit) {
 
 /** Puls je Woche - Schnitt und Spitze. */
 @Composable
-private fun PulseCard(state: DashboardState, onOpenHistory: () -> Unit) {
+private fun PulseCard(state: DashboardState, onOpen: () -> Unit) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard(modifier = Modifier.clickable(onClick = onOpenHistory)) {
-        ColumnChart(
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
+        PointLineChart(
             bars = state.recentPulse.map {
                 ChartBar(axisLabel(it), (it.hrAvg ?: 0).toDouble(), (it.hrMax ?: 0).toDouble())
             },
@@ -227,8 +230,8 @@ private fun LastSessionCard(summary: SessionSummaryEntity, onClick: () -> Unit) 
 
 /** Woche, Monat, Jahr - und was das in Bauwerken heisst. */
 @Composable
-private fun HeightCard(state: DashboardState, onOpenHistory: () -> Unit) {
-    BouldCard(modifier = Modifier.clickable(onClick = onOpenHistory)) {
+private fun HeightCard(state: DashboardState, onOpen: () -> Unit) {
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -321,9 +324,9 @@ private fun LastWeekCard(state: DashboardState, onOpenHistory: () -> Unit) {
 }
 
 @Composable
-private fun WeeksCard(state: DashboardState, onOpenHistory: () -> Unit) {
+private fun WeeksCard(state: DashboardState, onOpen: () -> Unit) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard(modifier = Modifier.clickable(onClick = onOpenHistory)) {
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
         ColumnChart(
             bars = state.recentWeeks.map {
                 ChartBar(label = axisLabel(it), value = it.climbHeightMeters)

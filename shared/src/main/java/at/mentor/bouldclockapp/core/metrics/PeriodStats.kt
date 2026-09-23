@@ -69,6 +69,16 @@ data class PeriodBucket(
 
     /** Anteil der Versuche, die beim ersten Mal durchgingen. */
     val flashRate: Double? get() = if (attemptCount > 0) flashCount.toDouble() / attemptCount else null
+
+    /** Erster Tag nach diesem Zeitraum - zum Filtern von Sessions. */
+    val endExclusive: LocalDate
+        get() = when (period) {
+            Period.ALL -> LocalDate.MAX
+            Period.DAY -> start.plusDays(1)
+            Period.WEEK -> start.plusWeeks(1)
+            Period.MONTH -> start.plusMonths(1)
+            Period.YEAR -> start.plusYears(1)
+        }
 }
 
 /** Kletterhoehe in den ueblichen Zeitraeumen, fuer das Dashboard. */

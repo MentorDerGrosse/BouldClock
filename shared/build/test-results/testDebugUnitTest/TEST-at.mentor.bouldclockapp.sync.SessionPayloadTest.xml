@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="at.mentor.bouldclockapp.sync.SessionPayloadTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:24:39.590Z" hostname="fedora" time="0.035">
+<testsuite name="at.mentor.bouldclockapp.sync.SessionPayloadTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:49:20.937Z" hostname="fedora" time="0.021">
   <properties/>
-  <testcase name="unbekannte Felder werden ignoriert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.017"/>
-  <testcase name="ein Paket ueberlebt Hin- und Rueckweg unveraendert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.002"/>
-  <testcase name="empfangene Daten gelten als synchronisiert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.003"/>
-  <testcase name="ein kaputter Versuch kippt nicht das ganze Paket" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.003"/>
-  <testcase name="fehlende Felder bekommen Voreinstellungen" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.001"/>
-  <testcase name="Pulswerte werden kompakt geschrieben" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.007"/>
+  <testcase name="unbekannte Felder werden ignoriert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.008"/>
+  <testcase name="ein Paket ueberlebt Hin- und Rueckweg unveraendert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.001"/>
+  <testcase name="empfangene Daten gelten als synchronisiert" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.002"/>
+  <testcase name="ein kaputter Versuch kippt nicht das ganze Paket" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.001"/>
+  <testcase name="fehlende Felder bekommen Voreinstellungen" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.003"/>
+  <testcase name="Pulswerte werden kompakt geschrieben" classname="at.mentor.bouldclockapp.sync.SessionPayloadTest" time="0.005"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -31,6 +31,8 @@ fun RestingHrScreen(
     onStart: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Beim ersten Start: erklaeren und ueberspringen lassen. */
+    firstRun: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 26.dp),
@@ -41,13 +43,26 @@ fun RestingHrScreen(
             RestingHrState.Idle -> {
                 Text("Ruhepuls", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "Zwei Minuten ruhig sitzen bleiben.",
+                    text = if (firstRun) {
+                        "Für die Kalorien brauchen wir deinen Ruhepuls. " +
+                            "Zwei Minuten still sitzen – danach nie wieder."
+                    } else {
+                        "Zwei Minuten ruhig sitzen bleiben."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
                 Button(onClick = onStart) {
                     Text("Messen")
+                }
+                if (firstRun) {
+                    // Ueberspringbar: ohne Messung rechnet die App mit einer
+                    // Annahme weiter, nur ungenauer. Das ist besser als jemand,
+                    // der beim ersten Start zwei Minuten warten soll.
+                    Button(onClick = onBack, colors = ButtonDefaults.filledTonalButtonColors()) {
+                        Text("Später")
+                    }
                 }
             }
 

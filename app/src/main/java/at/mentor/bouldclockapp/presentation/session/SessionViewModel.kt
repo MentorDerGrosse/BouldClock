@@ -175,6 +175,24 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     // --- Ruhepuls ---
 
+    /**
+     * Einmal beim ersten Start nachfragen, dann nie wieder von selbst.
+     *
+     * Der Ruhepuls geht doppelt in die Kalorien ein und ist monatelang gueltig -
+     * es lohnt also zu fragen, aber nur einmal. Wer ueberspringt, bekommt eine
+     * Schaetzung statt einer Messung, sonst nichts.
+     */
+    val needsRestingHr: StateFlow<Boolean> = combine(
+        profileDao.observe(),
+        settings.restingHrAsked,
+    ) { profile, asked ->
+        profile != null && profile.restingHrBpm == null && !asked
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun skipRestingHr() {
+        viewModelScope.launch { settings.markRestingHrAsked() }
+    }
+
     private val _restingHr = MutableStateFlow<RestingHrState>(RestingHrState.Idle)
     val restingHr: StateFlow<RestingHrState> = _restingHr
 
@@ -210,6 +228,9 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
             val resting = RestingHeartRate.fromSamples(samples)
             if (resting != null) saveRestingHr(resting)
+            // Auch ein Fehlschlag zaehlt als gefragt - sonst kommt die Frage
+            // bei jedem Start wieder.
+            settings.markRestingHrAsked()
             _restingHr.value = RestingHrState.Done(resting)
         }
     }

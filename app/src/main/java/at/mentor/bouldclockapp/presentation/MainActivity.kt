@@ -102,20 +102,25 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
 
             var showProgress by remember { mutableStateOf(false) }
             var showRestingHr by remember { mutableStateOf(false) }
+            val needsRestingHr by viewModel.needsRestingHr.collectAsStateWithLifecycle()
 
             when (val state = uiState) {
                 // Kurz leer statt aufblitzendem Startbildschirm - sonst legt ein
                 // schneller Tap eine zweite Session neben der offenen an.
                 SessionUiState.Restoring -> Box(Modifier.fillMaxSize())
 
-                SessionUiState.NoSession -> if (showRestingHr) {
+                // Beim ersten Start einmal nach dem Ruhepuls fragen - mit
+                // "Später" daneben, damit niemand zum Messen gezwungen wird.
+                SessionUiState.NoSession -> if (showRestingHr || needsRestingHr) {
                     val restingState by viewModel.restingHr.collectAsStateWithLifecycle()
                     ScreenScaffold {
                         RestingHrScreen(
                             state = restingState,
+                            firstRun = needsRestingHr && !showRestingHr,
                             onStart = viewModel::measureRestingHr,
                             onBack = {
                                 viewModel.dismissRestingHr()
+                                viewModel.skipRestingHr()
                                 showRestingHr = false
                             },
                         )

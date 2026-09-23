@@ -196,6 +196,135 @@ fun ColumnChart(
 }
 
 /**
+ * Punkte, mit Linien verbunden - fuer Werte, die einen Pegel beschreiben.
+ *
+ * Der Unterschied zum Balken ist nicht Geschmack: ein Balken behauptet eine
+ * Menge ab null, und ein Puls von 126 ist keine Menge. Die Linie zeigt, wie
+ * sich ein Pegel bewegt, und darf deshalb auch bei 100 anfangen.
+ *
+ * Antippen waehlt einen Punkt aus; dann steht der zweite Wert daneben - beim
+ * Puls die Spitze der Session.
+ */
+@Composable
+fun PointLineChart(
+    bars: List<ChartBar>,
+    modifier: Modifier = Modifier,
+    height: Dp = 148.dp,
+    selectedIndex: Int? = null,
+    onSelect: (Int?) -> Unit = {},
+    valueFormat: (Double) -> String = { it.toInt().toString() },
+    highlightFormat: ((Double) -> String)? = null,
+    emptyHint: String = "Für diesen Zeitraum noch nichts gemessen.",
+) {
+    val measured = bars.filter { it.value > 0.0 }
+    if (bars.isEmpty()) return
+    if (measured.isEmpty()) {
+        Text(
+            text = emptyHint,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier,
+        )
+        return
+    }
+
+    val colors = LocalChartColors.current
+    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val labelStyle = MaterialTheme.typography.labelSmall
+
+    // Der Pegel bekommt Luft nach oben und unten, statt am Rand zu kleben.
+    val values = measured.flatMap { listOfNotNull(it.value, it.highlight.takeIf { h -> h > 0.0 }) }
+    val low = (values.min() - 5).coerceAtLeast(0.0)
+    val high = values.max() + 5
+    val span = (high - low).coerceAtLeast(1.0)
+    val peakIndex = bars.indices.maxByOrNull { bars[it].value } ?: 0
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+                .pointerInput(bars.size) {
+                    detectTapGestures { offset ->
+                        val slot = size.width.toFloat() / bars.size
+                        val index = (offset.x / slot).toInt().coerceIn(0, bars.lastIndex)
+                        onSelect(if (index == selectedIndex) null else index)
+                    }
+                },
+        ) {
+            drawGrid(colors.grid)
+            val slot = size.width / bars.size
+
+            fun pointOf(index: Int, value: Double) = Offset(
+                x = slot * index + slot / 2f,
+                y = size.height - (((value - low) / span).toFloat() * size.height),
+            )
+
+            // Nur zwischen benachbarten gemessenen Punkten verbinden - eine
+            // Linie ueber eine Luecke hinweg erfindet einen Verlauf.
+            bars.indices.zipWithNext().forEach { (a, b) ->
+                if (bars[a].value > 0.0 && bars[b].value > 0.0) {
+                    drawLine(
+                        color = colors.series1,
+                        start = pointOf(a, bars[a].value),
+                        end = pointOf(b, bars[b].value),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    )
+                }
+            }
+
+            bars.forEachIndexed { index, bar ->
+                if (bar.value <= 0.0) return@forEachIndexed
+                val chosen = index == (selectedIndex ?: peakIndex)
+
+                if (bar.highlight > 0.0) {
+                    val top = pointOf(index, bar.highlight)
+                    drawCircle(colors.surface, radius = 5.dp.toPx(), center = top)
+                    drawCircle(colors.series2, radius = 3.dp.toPx(), center = top)
+                }
+
+                val point = pointOf(index, bar.value)
+                drawCircle(colors.surface, radius = if (chosen) 7.dp.toPx() else 6.dp.toPx(), center = point)
+                drawCircle(colors.series1, radius = if (chosen) 5.dp.toPx() else 4.dp.toPx(), center = point)
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            bars.forEachIndexed { index, bar ->
+                Text(
+                    text = bar.label,
+                    style = labelStyle,
+                    color = if (index == (selectedIndex ?: peakIndex)) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        axisColor
+                    },
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        val shown = bars.getOrNull(selectedIndex ?: peakIndex)
+        if (shown != null && shown.value > 0.0) {
+            Text(
+                text = buildString {
+                    append(shown.label).append(": ").append(valueFormat(shown.value))
+                    if (highlightFormat != null && shown.highlight > 0.0) {
+                        append(" · ").append(highlightFormat(shown.highlight))
+                    }
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+/**
  * Waagrechte Balken je Grad - die Gradpyramide.
  *
  * Waagrecht, weil die Beschriftung ein Grad ist und nicht unter eine Saeule

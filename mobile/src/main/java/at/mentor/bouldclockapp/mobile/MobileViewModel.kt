@@ -334,6 +334,23 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
         historyPeriod.value = value
     }
 
+    /**
+     * Die Sessions hinter einem Punkt im Diagramm.
+     *
+     * Damit wird aus einer Saeule etwas Anklickbares: welcher Abend steckt
+     * eigentlich in dieser Woche?
+     */
+    fun sessionsIn(bucket: PeriodBucket): List<SessionSummaryEntity> {
+        val from = bucket.start.atStartOfDay(zone).toInstant().toEpochMilli()
+        val until = if (bucket.period.isSingleBucket) {
+            Long.MAX_VALUE
+        } else {
+            bucket.endExclusive.atStartOfDay(zone).toInstant().toEpochMilli()
+        }
+        return summaries.value.filter { it.startedAt in from until until }
+            .sortedByDescending { it.startedAt }
+    }
+
     private val openSessionId = MutableStateFlow<String?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)

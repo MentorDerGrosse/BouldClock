@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -42,8 +43,25 @@ class AppSettings(private val context: Context) {
         context.settingsStore.edit { it[restKey(type)] = ms }
     }
 
+    /**
+     * Wurde beim ersten Start nach dem Ruhepuls gefragt?
+     *
+     * Einmal fragen, dann nie wieder von selbst - die Messung dauert zwei
+     * Minuten und ist danach monatelang gueltig. Wer sie ueberspringt, kann
+     * sie jederzeit ueber den Startbildschirm nachholen; die Kalorien rechnen
+     * solange mit einer Annahme weiter.
+     */
+    val restingHrAsked: Flow<Boolean> = context.settingsStore.data.map { prefs ->
+        prefs[KEY_RESTING_HR_ASKED] ?: false
+    }
+
+    suspend fun markRestingHrAsked() {
+        context.settingsStore.edit { it[KEY_RESTING_HR_ASKED] = true }
+    }
+
     private companion object {
         val KEY_GRADE_SYSTEM = stringPreferencesKey("grade_system")
+        val KEY_RESTING_HR_ASKED = booleanPreferencesKey("resting_hr_asked")
 
         /** Je Sessiontyp eine eigene Pause - Limit und Volumen sind verschiedene Sportarten. */
         fun restKey(type: SessionType) = longPreferencesKey("rest_target_${type.name}")
