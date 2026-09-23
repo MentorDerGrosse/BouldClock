@@ -169,12 +169,16 @@ class RawSensorRecorder(private val context: Context) {
                 samplingDelay = SensorManager.SENSOR_DELAY_GAME,
                 nominalHz = 50,
             ),
+            // Der Gyro lieferte bei gleicher Anforderung 1,7-mal so viele Punkte
+            // wie die Beschleunigung (68.293 gegen 39.382 in einer echten
+            // Session). Fuers Erkennen von Landungen ist die Beschleunigung das
+            // Hauptsignal; der Gyro liefert die Orientierung und darf groeber sein.
             TrackedSensor(
                 SensorKind.GYROSCOPE,
                 Sensor.TYPE_GYROSCOPE,
                 valuesPerSample = 3,
-                samplingDelay = SensorManager.SENSOR_DELAY_GAME,
-                nominalHz = 50,
+                samplingDelay = SensorManager.SENSOR_DELAY_UI,
+                nominalHz = 16,
             ),
             TrackedSensor(
                 SensorKind.PRESSURE,

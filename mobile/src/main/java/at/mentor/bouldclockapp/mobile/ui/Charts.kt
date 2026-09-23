@@ -76,6 +76,8 @@ fun ColumnChart(
     selectedIndex: Int? = null,
     onSelect: (Int?) -> Unit = {},
     valueFormat: (Double) -> String = { it.toInt().toString() },
+    /** Beschriftung des hervorgehobenen Anteils, wenn es einen gibt. */
+    highlightFormat: ((Double) -> String)? = null,
     emptyHint: String = "Für diesen Zeitraum noch nichts gemessen.",
 ) {
     if (bars.isEmpty()) return
@@ -173,11 +175,147 @@ fun ColumnChart(
             }
         }
 
-        // Genau ein Wert im Klartext: der ausgewaehlte, sonst der hoechste.
+        // Der ausgewaehlte Balken im Klartext, mit **beiden** Reihen. Ohne das
+        // bleibt ein zweifarbiger Balken huebsch und unlesbar: man sieht, dass
+        // ein Teil Tops war, aber nicht wie viele.
         val shown = bars.getOrNull(selectedIndex ?: peakIndex)
         if (shown != null && shown.value > 0.0) {
             Text(
-                text = "${shown.label}: ${valueFormat(shown.value)}",
+                text = buildString {
+                    append(shown.label).append(": ").append(valueFormat(shown.value))
+                    if (highlightFormat != null && shown.highlight > 0.0) {
+                        append(" · ").append(highlightFormat(shown.highlight))
+                    }
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Punkte, mit Linien verbunden - fuer Werte, die einen Pegel beschreiben.
+ *
+ * Der Unterschied zum Balken ist nicht Geschmack: ein Balken behauptet eine
+ * Menge ab null, und ein Puls von 126 ist keine Menge. Die Linie zeigt, wie
+ * sich ein Pegel bewegt, und darf deshalb auch bei 100 anfangen.
+ *
+ * Antippen waehlt einen Punkt aus; dann steht der zweite Wert daneben - beim
+ * Puls die Spitze der Session.
+ */
+@Composable
+fun PointLineChart(
+    bars: List<ChartBar>,
+    modifier: Modifier = Modifier,
+    height: Dp = 148.dp,
+    selectedIndex: Int? = null,
+    onSelect: (Int?) -> Unit = {},
+    valueFormat: (Double) -> String = { it.toInt().toString() },
+    highlightFormat: ((Double) -> String)? = null,
+    emptyHint: String = "Für diesen Zeitraum noch nichts gemessen.",
+) {
+    val measured = bars.filter { it.value > 0.0 }
+    if (bars.isEmpty()) return
+    if (measured.isEmpty()) {
+        Text(
+            text = emptyHint,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier,
+        )
+        return
+    }
+
+    val colors = LocalChartColors.current
+    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val labelStyle = MaterialTheme.typography.labelSmall
+
+    // Der Pegel bekommt Luft nach oben und unten, statt am Rand zu kleben.
+    val values = measured.flatMap { listOfNotNull(it.value, it.highlight.takeIf { h -> h > 0.0 }) }
+    val low = (values.min() - 5).coerceAtLeast(0.0)
+    val high = values.max() + 5
+    val span = (high - low).coerceAtLeast(1.0)
+    val peakIndex = bars.indices.maxByOrNull { bars[it].value } ?: 0
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+                .pointerInput(bars.size) {
+                    detectTapGestures { offset ->
+                        val slot = size.width.toFloat() / bars.size
+                        val index = (offset.x / slot).toInt().coerceIn(0, bars.lastIndex)
+                        onSelect(if (index == selectedIndex) null else index)
+                    }
+                },
+        ) {
+            drawGrid(colors.grid)
+            val slot = size.width / bars.size
+
+            fun pointOf(index: Int, value: Double) = Offset(
+                x = slot * index + slot / 2f,
+                y = size.height - (((value - low) / span).toFloat() * size.height),
+            )
+
+            // Nur zwischen benachbarten gemessenen Punkten verbinden - eine
+            // Linie ueber eine Luecke hinweg erfindet einen Verlauf.
+            bars.indices.zipWithNext().forEach { (a, b) ->
+                if (bars[a].value > 0.0 && bars[b].value > 0.0) {
+                    drawLine(
+                        color = colors.series1,
+                        start = pointOf(a, bars[a].value),
+                        end = pointOf(b, bars[b].value),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    )
+                }
+            }
+
+            bars.forEachIndexed { index, bar ->
+                if (bar.value <= 0.0) return@forEachIndexed
+                val chosen = index == (selectedIndex ?: peakIndex)
+
+                if (bar.highlight > 0.0) {
+                    val top = pointOf(index, bar.highlight)
+                    drawCircle(colors.surface, radius = 5.dp.toPx(), center = top)
+                    drawCircle(colors.series2, radius = 3.dp.toPx(), center = top)
+                }
+
+                val point = pointOf(index, bar.value)
+                drawCircle(colors.surface, radius = if (chosen) 7.dp.toPx() else 6.dp.toPx(), center = point)
+                drawCircle(colors.series1, radius = if (chosen) 5.dp.toPx() else 4.dp.toPx(), center = point)
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            bars.forEachIndexed { index, bar ->
+                Text(
+                    text = bar.label,
+                    style = labelStyle,
+                    color = if (index == (selectedIndex ?: peakIndex)) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        axisColor
+                    },
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        val shown = bars.getOrNull(selectedIndex ?: peakIndex)
+        if (shown != null && shown.value > 0.0) {
+            Text(
+                text = buildString {
+                    append(shown.label).append(": ").append(valueFormat(shown.value))
+                    if (highlightFormat != null && shown.highlight > 0.0) {
+                        append(" · ").append(highlightFormat(shown.highlight))
+                    }
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 8.dp),
@@ -238,13 +376,19 @@ fun GradePyramid(
                         }
                     }
                 }
+                // Beide Zahlen, nicht nur die Gesamtlaenge - sonst muss man den
+                // orangen Anteil schaetzen.
                 Text(
-                    text = bar.value.toInt().toString(),
+                    text = if (bar.highlight > 0.0) {
+                        "${bar.value.toInt()}/${bar.highlight.toInt()}"
+                    } else {
+                        bar.value.toInt().toString()
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.End,
                     maxLines = 1,
-                    modifier = Modifier.size(width = 36.dp, height = rowHeight)
+                    modifier = Modifier.size(width = 58.dp, height = rowHeight)
                         .padding(start = 8.dp, top = 4.dp),
                 )
             }
@@ -294,6 +438,67 @@ fun TrendLine(
         val last = pointAt(values.lastIndex)
         drawCircle(colors.surface, radius = 6.dp.toPx(), center = last)
         drawCircle(colors.series1, radius = 4.dp.toPx(), center = last)
+    }
+}
+
+/**
+ * Anteile einer geordneten Leiter als ein Balken, darunter die Zahlen.
+ *
+ * Fuer Pulszonen: die Form zeigt auf einen Blick, wie viel vom Abend wirklich
+ * hart war. Die Zahlen darunter sind kein Beiwerk - aus einem Balken allein
+ * liest niemand Minuten ab.
+ */
+@Composable
+fun StackedShareBar(
+    parts: List<Triple<String, Long, Color>>,
+    modifier: Modifier = Modifier,
+    valueFormat: (Long) -> String,
+) {
+    val total = parts.sumOf { it.second }
+    if (total <= 0L) return
+    val colors = LocalChartColors.current
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Canvas(modifier = Modifier.fillMaxWidth().height(18.dp)) {
+            var x = 0f
+            parts.forEach { (_, value, color) ->
+                if (value <= 0L) return@forEach
+                val width = size.width * value / total
+                drawRect(
+                    color = color,
+                    topLeft = Offset(x, 0f),
+                    size = androidx.compose.ui.geometry.Size(
+                        (width - BAR_GAP.toPx()).coerceAtLeast(1f),
+                        size.height,
+                    ),
+                )
+                x += width
+            }
+        }
+        parts.filter { it.second > 0L }.forEach { (label, value, color) ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = "${valueFormat(value)} · ${100 * value / total} %",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
     }
 }
 

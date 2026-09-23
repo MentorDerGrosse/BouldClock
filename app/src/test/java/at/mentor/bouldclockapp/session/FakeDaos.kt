@@ -4,9 +4,12 @@ import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SyncState
 import at.mentor.bouldclockapp.core.model.SessionType
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.data.db.dao.AttemptAggregate
 import at.mentor.bouldclockapp.data.db.dao.AttemptDao
 import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
+import at.mentor.bouldclockapp.data.db.dao.HrSessionRange
+import at.mentor.bouldclockapp.data.db.dao.HrZoneSeconds
 import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.data.db.dao.GradeBucket
@@ -14,11 +17,13 @@ import at.mentor.bouldclockapp.data.db.dao.ProblemTally
 import at.mentor.bouldclockapp.data.db.dao.SessionBaseline
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
+import at.mentor.bouldclockapp.data.db.dao.UserProfileDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.MetricSampleEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
+import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.math.abs
@@ -70,6 +75,12 @@ class FakeSessionDao : SessionDao {
         gymId: String?,
         before: Long,
     ): SessionEntity? = null
+
+    override suspend fun finishedIds(): List<String> =
+        sessions.values
+            .filter { it.state == SessionState.FINISHED && it.meta.deletedAt == null }
+            .sortedByDescending { it.startedAt }
+            .map { it.id }
 
     override suspend fun softDelete(id: String, now: Long) {
         sessions[id]?.let { sessions[id] = it.copy(meta = it.meta.copy(deletedAt = now, updatedAt = now)) }
@@ -125,8 +136,11 @@ class FakeAttemptDao : AttemptDao {
     override suspend fun allBySession(sessionId: String): List<AttemptEntity> =
         of(sessionId).sortedBy { it.ordinal }
 
+    /** Wie die echte Abfrage: **ohne** Zugproben. */
     override suspend fun finishedBySession(sessionId: String): List<AttemptEntity> =
-        of(sessionId).filter { it.endedAt != null }.sortedBy { it.ordinal }
+        of(sessionId)
+            .filter { it.endedAt != null && it.kind == AttemptKind.ATTEMPT }
+            .sortedBy { it.ordinal }
 
     override suspend fun delete(id: String) {
         attempts.remove(id)
@@ -143,7 +157,8 @@ class FakeAttemptDao : AttemptDao {
     }
 
     override suspend fun aggregate(sessionId: String): AttemptAggregate {
-        val done = of(sessionId).filter { it.endedAt != null }
+        // Zugproben zaehlen nicht - wie in der echten Abfrage.
+        val done = of(sessionId).filter { it.endedAt != null && it.kind == AttemptKind.ATTEMPT }
         return AttemptAggregate(
             attemptCount = done.size,
             sendCount = done.count { it.outcome?.isSend == true },
@@ -156,18 +171,11 @@ class FakeAttemptDao : AttemptDao {
         )
     }
 
-    override fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>> = flowOf(emptyList())
+    /** Alle beendeten Bloecke, Zugproben eingeschlossen. */
+    override suspend fun finishedBlocks(sessionId: String): List<AttemptEntity> =
+        of(sessionId).filter { it.endedAt != null }.sortedBy { it.ordinal }
 
-    /**
-     * Vereinfacht: die echte Abfrage verlangt zusaetzlich eine
-     * Luftdruckaufzeichnung und eine beendete Session. Beides kennt dieses
-     * Double nicht - fuer den Zweck reicht "Versuch ohne Hoehe".
-     */
-    override suspend fun sessionsMissingClimbHeight(): List<String> =
-        attempts.values
-            .filter { it.meta.deletedAt == null && it.endedAt != null && it.climbHeightMeters == null }
-            .map { it.sessionId }
-            .distinct()
+    override fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>> = flowOf(emptyList())
 
     override suspend fun setProblem(attemptId: String, problemId: String?, now: Long) {
         attempts[attemptId]?.let {
@@ -210,6 +218,33 @@ class FakeHrSampleDao(private val samples: MutableList<HrSampleEntity> = mutable
     override suspend fun deleteForSession(sessionId: String) {
         samples.removeAll { it.sessionId == sessionId }
     }
+
+    override fun observeBySession(sessionId: String, minAccuracy: Int): Flow<List<HrSampleEntity>> =
+        flowOf(samples.filter { it.sessionId == sessionId && it.accuracy >= minAccuracy })
+
+    override fun observeSessionRanges(minAccuracy: Int): Flow<List<HrSessionRange>> =
+        flowOf(
+            samples.filter { it.accuracy >= minAccuracy }
+                .groupBy { it.sessionId }
+                .map { (id, values) ->
+                    HrSessionRange(
+                        sessionId = id,
+                        minBpm = values.minOf { it.bpm },
+                        maxBpm = values.maxOf { it.bpm },
+                        avgBpm = values.map { it.bpm }.average().toInt(),
+                        samples = values.size,
+                    )
+                },
+        )
+
+    override fun observeZoneSeconds(
+        minAccuracy: Int,
+        z1: Int,
+        z2: Int,
+        z3: Int,
+        z4: Int,
+        z5: Int,
+    ): Flow<List<HrZoneSeconds>> = flowOf(emptyList())
 }
 
 class FakeMetricSampleDao : MetricSampleDao {
@@ -266,4 +301,16 @@ class FakeSummaryDao : SessionSummaryDao {
     override suspend fun deleteForSession(sessionId: String) {
         summaries.remove(sessionId)
     }
+}
+
+/** Ein Profil im Speicher. */
+class FakeUserProfileDao(var profile: UserProfileEntity? = null) : UserProfileDao {
+    override suspend fun upsert(profile: UserProfileEntity) {
+        this.profile = profile
+    }
+
+    override suspend fun get(): UserProfileEntity? = profile?.takeIf { it.meta.deletedAt == null }
+
+    override fun observe(): Flow<UserProfileEntity?> =
+        flowOf(profile?.takeIf { it.meta.deletedAt == null })
 }

@@ -40,6 +40,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import at.mentor.bouldclockapp.mobile.boulders.BoulderScreen
 import at.mentor.bouldclockapp.mobile.dashboard.DashboardScreen
+import at.mentor.bouldclockapp.mobile.detail.Metric
+import at.mentor.bouldclockapp.mobile.detail.MetricDetailScreen
 import at.mentor.bouldclockapp.mobile.gyms.GymScreen
 import at.mentor.bouldclockapp.mobile.history.HistoryScreen
 import at.mentor.bouldclockapp.mobile.profile.ProfileScreen
@@ -86,6 +88,7 @@ private fun BouldClockApp() {
 
     var destination by remember { mutableStateOf(Destination.DASHBOARD) }
     var openSessionId by remember { mutableStateOf<String?>(null) }
+    var openMetric by remember { mutableStateOf<Metric?>(null) }
 
     fun open(sessionId: String) {
         viewModel.openSession(sessionId)
@@ -97,14 +100,25 @@ private fun BouldClockApp() {
         openSessionId = null
     }
 
+    fun closeMetric() {
+        openMetric = null
+    }
+
     fun go(target: Destination) {
         closeDetail()
         destination = target
         scope.launch { drawerState.close() }
     }
 
-    BackHandler(enabled = openSessionId != null || destination != Destination.DASHBOARD) {
-        if (openSessionId != null) closeDetail() else destination = Destination.DASHBOARD
+    BackHandler(
+        enabled = openSessionId != null || openMetric != null ||
+            destination != Destination.DASHBOARD,
+    ) {
+        when {
+            openSessionId != null -> closeDetail()
+            openMetric != null -> closeMetric()
+            else -> destination = Destination.DASHBOARD
+        }
     }
 
     ModalNavigationDrawer(
@@ -126,10 +140,20 @@ private fun BouldClockApp() {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(openSessionId?.let { "Session" } ?: destination.title) },
+                    title = {
+                        Text(
+                            when {
+                                openSessionId != null -> "Session"
+                                openMetric != null -> openMetric!!.title
+                                else -> destination.title
+                            },
+                        )
+                    },
                     navigationIcon = {
-                        if (openSessionId != null) {
-                            IconButton(onClick = { closeDetail() }) {
+                        if (openSessionId != null || openMetric != null) {
+                            IconButton(
+                                onClick = { if (openSessionId != null) closeDetail() else closeMetric() },
+                            ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück")
                             }
                         } else {
@@ -146,14 +170,29 @@ private fun BouldClockApp() {
         ) { padding ->
             if (openSessionId != null) {
                 DetailRoute(viewModel, openSessionId!!, padding, ::closeDetail)
+            } else if (openMetric != null) {
+                val period by viewModel.period.collectAsStateWithLifecycle()
+                val buckets by viewModel.historyBuckets.collectAsStateWithLifecycle()
+                MetricDetailScreen(
+                    metric = openMetric!!,
+                    period = period,
+                    buckets = buckets,
+                    sessionsOf = viewModel::sessionsIn,
+                    onSelectPeriod = viewModel::selectPeriod,
+                    onOpenSession = { closeMetric(); open(it) },
+                    modifier = Modifier.padding(padding),
+                )
             } else {
                 when (destination) {
                     Destination.DASHBOARD -> {
                         val state by viewModel.dashboard.collectAsStateWithLifecycle()
+                        val readiness by viewModel.readiness.collectAsStateWithLifecycle()
                         DashboardScreen(
                             state = state,
+                            readiness = readiness,
                             onOpenSession = ::open,
                             onOpenHistory = { go(Destination.HISTORY) },
+                            onOpenMetric = { openMetric = it },
                             modifier = Modifier.padding(padding),
                         )
                     }
@@ -163,12 +202,19 @@ private fun BouldClockApp() {
                         val buckets by viewModel.historyBuckets.collectAsStateWithLifecycle()
                         val grades by viewModel.gradeHistogram.collectAsStateWithLifecycle()
                         val hrr60 by viewModel.hrr60Trend.collectAsStateWithLifecycle()
+                        val zones by viewModel.periodZones.collectAsStateWithLifecycle()
+                        val zoneBounds by viewModel.zoneBounds.collectAsStateWithLifecycle()
+                        val totals by viewModel.periodTotals.collectAsStateWithLifecycle()
                         HistoryScreen(
                             period = period,
                             buckets = buckets,
                             grades = grades,
                             hrr60 = hrr60,
+                            zones = zones,
+                            zoneBounds = zoneBounds,
+                            totals = totals,
                             onSelectPeriod = viewModel::selectPeriod,
+                            onOpenMetric = { openMetric = it },
                             modifier = Modifier.padding(padding),
                         )
                     }
@@ -207,8 +253,8 @@ private fun BouldClockApp() {
                         val profile by viewModel.profile.collectAsStateWithLifecycle()
                         ProfileScreen(
                             profile = profile,
-                            onSave = { weight, age, sex ->
-                                viewModel.saveProfile(weight, age, sex)
+                            onSave = { weight, age, sex, height, restingHr ->
+                                viewModel.saveProfile(weight, age, sex, height, restingHr)
                                 go(Destination.DASHBOARD)
                             },
                             modifier = Modifier.padding(padding),
@@ -230,11 +276,13 @@ private fun DetailRoute(
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     val gyms by viewModel.gyms.collectAsStateWithLifecycle()
     val problems by viewModel.problems.collectAsStateWithLifecycle()
+    val zoneBounds by viewModel.zoneBounds.collectAsStateWithLifecycle()
 
     SessionDetailScreen(
         detail = detail,
         gyms = gyms,
         problems = problems,
+        zoneBounds = zoneBounds,
         modifier = Modifier.padding(padding),
         actions = SessionDetailActions(
             onRpeChange = { viewModel.setRpe(sessionId, it) },
@@ -248,6 +296,7 @@ private fun DetailRoute(
             onGradeChange = { id, grade -> viewModel.setAttemptGrade(sessionId, id, grade) },
             onAngleChange = { id, degrees -> viewModel.setAttemptAngle(sessionId, id, degrees) },
             onTopMoveChange = { id, move -> viewModel.setAttemptTopMove(sessionId, id, move) },
+            onKindChange = { id, kind -> viewModel.setAttemptKind(sessionId, id, kind) },
             onDeleteAttempt = { viewModel.deleteAttempt(sessionId, it) },
             onAssignProblem = { ids, problemId ->
                 viewModel.assignProblem(sessionId, ids, problemId)

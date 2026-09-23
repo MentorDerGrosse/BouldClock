@@ -8,6 +8,7 @@ import at.mentor.bouldclockapp.core.model.SessionMetric
 import at.mentor.bouldclockapp.core.model.SessionState
 import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.core.metrics.Barometry
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.metrics.PressurePoint
 import at.mentor.bouldclockapp.core.metrics.PressureTraceSource
 import at.mentor.bouldclockapp.core.session.RestProgress
@@ -32,6 +33,7 @@ class SessionControllerTest {
     private lateinit var hrDao: FakeHrSampleDao
     private lateinit var metricDao: FakeMetricSampleDao
     private lateinit var summaryDao: FakeSummaryDao
+    private lateinit var profileDao: FakeUserProfileDao
     private lateinit var controller: SessionController
 
     /** Steuerbare Uhr - sonst liesse sich "die Pause ist abgelaufen" nicht pruefen. */
@@ -46,15 +48,26 @@ class SessionControllerTest {
         hrDao = FakeHrSampleDao()
         metricDao = FakeMetricSampleDao()
         summaryDao = FakeSummaryDao()
+        // Ohne Profil gibt es keine Kalorien - die meisten Tests brauchen keine.
+        profileDao = FakeUserProfileDao()
         controller = newController()
     }
+
+    private fun testProfile() = at.mentor.bouldclockapp.data.db.entity.UserProfileEntity(
+        weightKg = 73,
+        birthYear = java.time.LocalDate.now().year - 21,
+        sex = at.mentor.bouldclockapp.core.model.BiologicalSex.MALE,
+        heightCm = 180,
+        restingHrBpm = 60,
+        meta = at.mentor.bouldclockapp.data.db.entity.RecordMeta.now(1_000_000L),
+    )
 
     /** Baut einen Controller mit den Doubles - eine Stelle statt sechs. */
     private fun newController(
         pressure: PressureTraceSource = PressureTraceSource.None,
         gradeSystem: GradeSystem = GradeSystem.FONT,
     ) = SessionController(
-        sessionDao, attemptDao, hrDao, metricDao, summaryDao,
+        sessionDao, attemptDao, hrDao, metricDao, summaryDao, profileDao,
         pressureTraceSource = pressure,
         preferredGradeSystem = { gradeSystem },
     ) { now }
@@ -275,12 +288,52 @@ class SessionControllerTest {
         advance(gradingMs); press()
 
         advance(180_000)
-        press()
+        // Gerechnet wird am Sessionende, aus den fertigen Pulswerten - nicht
+        // mehr per verzoegertem Auftrag waehrend der Session.
+        controller.finish()
 
         val first = attemptDao.attempts.values.first { it.ordinal == 1 }
         assertEquals(168, first.hrEnd)
         assertEquals(132, first.hrAfter60s)
         assertEquals(36, first.hrr60)
+    }
+
+    /**
+     * Eine nachtraeglich zur Zugprobe erklaerte Runde unterbricht die Erholung.
+     *
+     * So entsteht eine Zugprobe: auf der Uhr wie ein Versuch protokolliert, am
+     * Handy umgewidmet. Die Regel selbst steht in RecoveryTest - hier geht es
+     * darum, dass der Controller sie beim Neurechnen anwendet.
+     */
+    @Test
+    fun `eine umgewidmete Runde unterbricht die Erholung`() = runTest {
+        controller.start()
+        advance(5_000); press()
+        advance(30_000)
+        val sessionId = controller.session.value!!.id
+        hrDao.add(sessionId, at = now, bpm = 168)
+        press()
+        hrDao.add(sessionId, at = now + 60_000L, bpm = 132)
+        advance(gradingMs); press()
+
+        // Nach 20 s noch einmal kurz an die Wand - mitten im Erholungsfenster.
+        advance(20_000); press()
+        advance(15_000); press()
+        advance(gradingMs); press()
+        advance(180_000)
+        controller.finish()
+
+        val erster = attemptDao.attempts.values.first { it.ordinal == 1 }
+        // Als Versuch gezaehlt stoert er die Erholung ohnehin.
+        assertNull(erster.hrr60)
+
+        // Und als Zugprobe erklaert ebenso - nur zaehlt er dann nicht als Versuch.
+        val zweiter = attemptDao.attempts.values.first { it.ordinal == 2 }
+        attemptDao.upsert(zweiter.copy(kind = AttemptKind.MOVE_TEST))
+        controller.backfillAnalysis()
+
+        assertNull(attemptDao.attempts.values.first { it.ordinal == 1 }.hrr60)
+        assertEquals(1, summaryDao.summaries.getValue(sessionId).attemptCount)
     }
 
     @Test
@@ -593,7 +646,7 @@ class SessionControllerTest {
 
         // Jetzt mit Verlauf nachtragen.
         val nachtrag = newController(pressure = climbTrace(meters = 4.0))
-        val geaendert = nachtrag.backfillClimbHeights()
+        val geaendert = nachtrag.backfillAnalysis()
 
         assertEquals(listOf(ohne.summary.sessionId), geaendert)
         assertEquals(4.0, attempt(1).climbHeightMeters!!, 0.4)
@@ -614,8 +667,8 @@ class SessionControllerTest {
         controller.finish()
 
         val nachtrag = newController(pressure = climbTrace(meters = 4.0))
-        assertEquals(1, nachtrag.backfillClimbHeights().size)
-        assertTrue(nachtrag.backfillClimbHeights().isEmpty())
+        assertEquals(1, nachtrag.backfillAnalysis().size)
+        assertTrue(nachtrag.backfillAnalysis().isEmpty())
     }
 
     /** Ohne brauchbaren Luftdruck bleibt alles, wie es war. */
@@ -627,7 +680,7 @@ class SessionControllerTest {
         advance(10_000)
         controller.finish()
 
-        assertTrue(controller.backfillClimbHeights().isEmpty())
+        assertTrue(controller.backfillAnalysis().isEmpty())
         assertNull(attempt(1).climbHeightMeters)
     }
 
@@ -659,21 +712,24 @@ class SessionControllerTest {
         doAttempt(climbMs = 20_000L)
         advance(30_000)
 
-        val versuche = attemptDao.attempts.values.sortedBy { it.ordinal }
-        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[0].startedAt, 10.0)
-        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[0].endedAt!!, 14.0)
-        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[1].startedAt, 20.0)
-        metricDao.add(sessionId, SessionMetric.CALORIES, versuche[1].endedAt!!, 23.0)
-        metricDao.add(sessionId, SessionMetric.CALORIES, now, 30.0)
+        profileDao.profile = testProfile()
+        // Sekuendlicher Puls ueber die ganze Session.
+        val start = sessionDao.sessions.getValue(sessionId).startedAt
+        (0..((now - start) / 1000L).toInt()).forEach { i ->
+            hrDao.add(sessionId, at = start + i * 1000L, bpm = 140)
+        }
 
         val finished = controller.finish()!!
 
-        assertEquals(30.0, finished.summary.caloriesTotal!!, 0.01)
-        assertEquals(7.0, finished.summary.caloriesOnWall!!, 0.01)
+        val total = finished.summary.caloriesTotal!!
+        val onWall = finished.summary.caloriesOnWall!!
+        assertTrue("$total muss ueber null liegen", total > 0.0)
+        assertTrue("$onWall muss unter $total liegen", onWall in 0.0..total)
     }
 
     @Test
-    fun `ohne Kalorienmessung bleiben beide Werte leer`() = runTest {
+    fun `ohne Profil bleiben die Kalorien leer`() = runTest {
+        // Ohne Gewicht ist jede Kalorienzahl geraten - lieber keine.
         controller.start()
         advance(5_000)
         doAttempt(climbMs = 20_000L)

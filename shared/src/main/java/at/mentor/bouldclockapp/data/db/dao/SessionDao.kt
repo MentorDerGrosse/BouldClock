@@ -75,6 +75,16 @@ interface SessionDao {
     )
     suspend fun pendingSync(): List<SessionEntity>
 
+    /** Alle beendeten Sessions - Grundlage fuers nachtraegliche Neurechnen. */
+    @Query(
+        """
+        SELECT id FROM session
+        WHERE state = 'FINISHED' AND deletedAt IS NULL
+        ORDER BY startedAt DESC
+        """,
+    )
+    suspend fun finishedIds(): List<String>
+
     /**
      * Weich loeschen.
      *

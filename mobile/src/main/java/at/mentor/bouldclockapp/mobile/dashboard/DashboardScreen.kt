@@ -23,14 +23,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.Grades
+import at.mentor.bouldclockapp.core.metrics.Readiness
+import at.mentor.bouldclockapp.core.metrics.ReadinessLevel
 import at.mentor.bouldclockapp.core.model.LandmarkComparison
 import at.mentor.bouldclockapp.core.text.attemptNoun
 import at.mentor.bouldclockapp.core.text.sessionNoun
 import at.mentor.bouldclockapp.core.text.topNoun
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.mobile.DashboardState
+import at.mentor.bouldclockapp.mobile.detail.Metric
 import at.mentor.bouldclockapp.mobile.axisLabel
+import at.mentor.bouldclockapp.mobile.formatBpm
 import at.mentor.bouldclockapp.mobile.formatDurationShort
+import at.mentor.bouldclockapp.mobile.formatPerWeek
+import at.mentor.bouldclockapp.mobile.formatPercent
+import at.mentor.bouldclockapp.mobile.ui.ChartLegend
+import at.mentor.bouldclockapp.mobile.ui.StatRow
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.formatMeters
 import at.mentor.bouldclockapp.mobile.formatSessionDate
@@ -38,6 +46,7 @@ import at.mentor.bouldclockapp.mobile.formatTimes
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
 import at.mentor.bouldclockapp.mobile.ui.ChartBar
 import at.mentor.bouldclockapp.mobile.ui.ColumnChart
+import at.mentor.bouldclockapp.mobile.ui.PointLineChart
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
 import at.mentor.bouldclockapp.mobile.ui.SectionHeader
 import at.mentor.bouldclockapp.mobile.ui.StatTile
@@ -53,8 +62,10 @@ import at.mentor.bouldclockapp.mobile.ui.StatTile
 @Composable
 fun DashboardScreen(
     state: DashboardState,
+    readiness: Readiness,
     onOpenSession: (String) -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenMetric: (Metric) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
@@ -72,6 +83,8 @@ fun DashboardScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item { ReadinessCard(readiness) }
+
         item {
             LastSessionCard(
                 summary = state.lastSession,
@@ -79,14 +92,89 @@ fun DashboardScreen(
             )
         }
 
-        item { SectionHeader("Höhenmeter") }
-        item { HeightCard(state, onOpenHistory) }
+        item { SectionHeader("Insgesamt", trailing = "antippen") { onOpenMetric(Metric.VOLUME) } }
+        item { RatesCard(state) { onOpenMetric(Metric.VOLUME) } }
+
+        item { SectionHeader("Höhenmeter", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
+        item { HeightCard(state) { onOpenMetric(Metric.HEIGHT) } }
 
         item { SectionHeader("Vergangene Woche") }
         item { LastWeekCard(state, onOpenHistory) }
 
-        item { SectionHeader("Letzte 8 Wochen", trailing = "antippen") }
-        item { WeeksCard(state, onOpenHistory) }
+        item { SectionHeader("Letzte 8 Wochen", trailing = "antippen") { onOpenMetric(Metric.HEIGHT) } }
+        item { WeeksCard(state) { onOpenMetric(Metric.HEIGHT) } }
+
+        if (state.recentPulse.any { it.hrAvg != null }) {
+            item { SectionHeader("Puls je Woche", trailing = "antippen") { onOpenMetric(Metric.PULSE) } }
+            item { PulseCard(state) { onOpenMetric(Metric.PULSE) } }
+        }
+    }
+}
+
+/**
+ * Ist heute ein guter Tag zum Bouldern?
+ *
+ * Kein Punktwert, sondern eine Einschaetzung mit ausgeschriebener Begruendung -
+ * eine Zahl ohne Begruendung waere ein Orakel, und ein Orakel glaubt man genau
+ * einmal. Was die App nicht sieht - Schlaf, Muskelkater, Lust - weiss nur der
+ * Mensch davor.
+ */
+@Composable
+private fun ReadinessCard(readiness: Readiness) {
+    if (readiness.level == ReadinessLevel.UNKNOWN) return
+    BouldCard {
+        Text(
+            text = readiness.level.displayName,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = when (readiness.level) {
+                ReadinessLevel.RESTED -> MaterialTheme.colorScheme.primary
+                ReadinessLevel.TIRED -> MaterialTheme.colorScheme.onSurfaceVariant
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+        )
+        readiness.reasons.forEach { reason ->
+            Text(
+                text = reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Quoten und Trainingshäufigkeit über alles - die Zahlen zum Angeben. */
+@Composable
+private fun RatesCard(state: DashboardState, onOpen: () -> Unit) {
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            StatTile(state.flashRate?.let { formatPercent(it) } ?: "–", "Flashquote")
+            StatTile(state.sendRate?.let { formatPercent(it) } ?: "–", "Topquote")
+            StatTile(state.sessionCount.toString(), "Sessions")
+        }
+        state.sessionsPerWeek?.let { StatRow("Häufigkeit", formatPerWeek(it)) }
+    }
+}
+
+/** Puls je Woche - Schnitt und Spitze. */
+@Composable
+private fun PulseCard(state: DashboardState, onOpen: () -> Unit) {
+    var selected by remember { mutableStateOf<Int?>(null) }
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
+        PointLineChart(
+            bars = state.recentPulse.map {
+                ChartBar(axisLabel(it), (it.hrAvg ?: 0).toDouble(), (it.hrMax ?: 0).toDouble())
+            },
+            selectedIndex = selected,
+            onSelect = { selected = it },
+            valueFormat = { "${it.toInt()} bpm im Schnitt" },
+            highlightFormat = { "Spitze ${it.toInt()} bpm" },
+            emptyHint = "Noch kein Puls aufgezeichnet.",
+        )
+        ChartLegend(first = "Schnitt", second = "Spitze")
     }
 }
 
@@ -127,7 +215,7 @@ private fun LastSessionCard(summary: SessionSummaryEntity, onClick: () -> Unit) 
             text = listOfNotNull(
                 formatDurationShort(summary.totalMs),
                 summary.caloriesTotal?.let { formatKcal(it) },
-                summary.hrMax?.let { "Puls max $it" },
+                summary.hrMax?.let { "Puls max ${formatBpm(it)}" },
             ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -142,8 +230,8 @@ private fun LastSessionCard(summary: SessionSummaryEntity, onClick: () -> Unit) 
 
 /** Woche, Monat, Jahr - und was das in Bauwerken heisst. */
 @Composable
-private fun HeightCard(state: DashboardState, onOpenHistory: () -> Unit) {
-    BouldCard(modifier = Modifier.clickable(onClick = onOpenHistory)) {
+private fun HeightCard(state: DashboardState, onOpen: () -> Unit) {
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -236,9 +324,9 @@ private fun LastWeekCard(state: DashboardState, onOpenHistory: () -> Unit) {
 }
 
 @Composable
-private fun WeeksCard(state: DashboardState, onOpenHistory: () -> Unit) {
+private fun WeeksCard(state: DashboardState, onOpen: () -> Unit) {
     var selected by remember { mutableStateOf<Int?>(null) }
-    BouldCard(modifier = Modifier.clickable(onClick = onOpenHistory)) {
+    BouldCard(modifier = Modifier.clickable(onClick = onOpen)) {
         ColumnChart(
             bars = state.recentWeeks.map {
                 ChartBar(label = axisLabel(it), value = it.climbHeightMeters)

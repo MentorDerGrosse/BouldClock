@@ -104,6 +104,31 @@ enum class WallAngle(val displayName: String) {
 enum class SensorKind { ACCELEROMETER, GYROSCOPE, PRESSURE }
 
 /**
+ * Was fuer ein Block Zeit an der Wand das war.
+ *
+ * Beim Bouldern probiert man einzelne Zuege, ohne vom Boden zu starten - meist
+ * direkt nach einem Sturz. Das ist koerperlich Arbeit und muss in die Kalorien,
+ * es ist aber **kein Versuch** und darf weder die Versuchszahl noch die
+ * Erfolgsquote noch die Gradpyramide verfaelschen.
+ *
+ * Deshalb dieselbe Tabelle mit einem Unterscheidungsmerkmal statt einer zweiten:
+ * physisch ist beides dasselbe - ein Zeitraum an der Wand mit Anfang, Ende und
+ * Pulsfenster. Eine eigene Tabelle wuerde die ganze Mechanik doppeln.
+ *
+ * Namen sind Teil des Datenbankvertrags.
+ */
+enum class AttemptKind(val displayName: String) {
+    /** Ein echter Versuch, vom Start weg. */
+    ATTEMPT("Versuch"),
+
+    /** Einzelne Zuege probiert. Zaehlt fuer Kalorien, sonst fuer nichts. */
+    MOVE_TEST("Zug"),
+    ;
+
+    val isAttempt: Boolean get() = this == ATTEMPT
+}
+
+/**
  * Fortlaufend mitgezaehlte Messgroessen einer Session.
  *
  * Alle nach demselben Muster: ein monoton steigender Stand, den Health Services

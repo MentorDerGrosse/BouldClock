@@ -10,6 +10,7 @@ import androidx.room.util.performSuspending
 import androidx.sqlite.SQLiteStatement
 import at.mentor.bouldclockapp.`data`.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.`data`.db.entity.RecordMeta
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
 import at.mentor.bouldclockapp.core.model.SyncState
@@ -39,7 +40,7 @@ public class AttemptDao_Impl(
   init {
     this.__db = __db
     this.__upsertAdapterOfAttemptEntity = EntityUpsertAdapter<AttemptEntity>(object : EntityInsertAdapter<AttemptEntity>() {
-      protected override fun createQuery(): String = "INSERT INTO `attempt` (`id`,`sessionId`,`problemId`,`ordinal`,`startsNewBoulder`,`startedAt`,`endedAt`,`outcome`,`gradeValue`,`gradeSystem`,`topMoveReached`,`climbHeightMeters`,`boardAngleDegrees`,`hrAvg`,`hrMax`,`hrEnd`,`hrAfter60s`,`hrr60`,`restAfterMs`,`createdAt`,`updatedAt`,`deletedAt`,`syncState`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      protected override fun createQuery(): String = "INSERT INTO `attempt` (`id`,`sessionId`,`problemId`,`ordinal`,`kind`,`startsNewBoulder`,`startedAt`,`endedAt`,`outcome`,`gradeValue`,`gradeSystem`,`topMoveReached`,`climbHeightMeters`,`boardAngleDegrees`,`hrAvg`,`hrMax`,`hrEnd`,`hrAfter60s`,`hrr60`,`restAfterMs`,`createdAt`,`updatedAt`,`deletedAt`,`syncState`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
 
       protected override fun bind(statement: SQLiteStatement, entity: AttemptEntity) {
         statement.bindText(1, entity.id)
@@ -51,100 +52,101 @@ public class AttemptDao_Impl(
           statement.bindText(3, _tmpProblemId)
         }
         statement.bindLong(4, entity.ordinal.toLong())
+        statement.bindText(5, __AttemptKind_enumToString(entity.kind))
         val _tmp: Int = if (entity.startsNewBoulder) 1 else 0
-        statement.bindLong(5, _tmp.toLong())
-        statement.bindLong(6, entity.startedAt)
+        statement.bindLong(6, _tmp.toLong())
+        statement.bindLong(7, entity.startedAt)
         val _tmpEndedAt: Long? = entity.endedAt
         if (_tmpEndedAt == null) {
-          statement.bindNull(7)
+          statement.bindNull(8)
         } else {
-          statement.bindLong(7, _tmpEndedAt)
+          statement.bindLong(8, _tmpEndedAt)
         }
         val _tmpOutcome: AttemptOutcome? = entity.outcome
         if (_tmpOutcome == null) {
-          statement.bindNull(8)
+          statement.bindNull(9)
         } else {
-          statement.bindText(8, __AttemptOutcome_enumToString(_tmpOutcome))
+          statement.bindText(9, __AttemptOutcome_enumToString(_tmpOutcome))
         }
         val _tmpGradeValue: Int? = entity.gradeValue
         if (_tmpGradeValue == null) {
-          statement.bindNull(9)
+          statement.bindNull(10)
         } else {
-          statement.bindLong(9, _tmpGradeValue.toLong())
+          statement.bindLong(10, _tmpGradeValue.toLong())
         }
         val _tmpGradeSystem: GradeSystem? = entity.gradeSystem
         if (_tmpGradeSystem == null) {
-          statement.bindNull(10)
+          statement.bindNull(11)
         } else {
-          statement.bindText(10, __GradeSystem_enumToString(_tmpGradeSystem))
+          statement.bindText(11, __GradeSystem_enumToString(_tmpGradeSystem))
         }
         val _tmpTopMoveReached: Int? = entity.topMoveReached
         if (_tmpTopMoveReached == null) {
-          statement.bindNull(11)
+          statement.bindNull(12)
         } else {
-          statement.bindLong(11, _tmpTopMoveReached.toLong())
+          statement.bindLong(12, _tmpTopMoveReached.toLong())
         }
         val _tmpClimbHeightMeters: Double? = entity.climbHeightMeters
         if (_tmpClimbHeightMeters == null) {
-          statement.bindNull(12)
+          statement.bindNull(13)
         } else {
-          statement.bindDouble(12, _tmpClimbHeightMeters)
+          statement.bindDouble(13, _tmpClimbHeightMeters)
         }
         val _tmpBoardAngleDegrees: Int? = entity.boardAngleDegrees
         if (_tmpBoardAngleDegrees == null) {
-          statement.bindNull(13)
+          statement.bindNull(14)
         } else {
-          statement.bindLong(13, _tmpBoardAngleDegrees.toLong())
+          statement.bindLong(14, _tmpBoardAngleDegrees.toLong())
         }
         val _tmpHrAvg: Int? = entity.hrAvg
         if (_tmpHrAvg == null) {
-          statement.bindNull(14)
+          statement.bindNull(15)
         } else {
-          statement.bindLong(14, _tmpHrAvg.toLong())
+          statement.bindLong(15, _tmpHrAvg.toLong())
         }
         val _tmpHrMax: Int? = entity.hrMax
         if (_tmpHrMax == null) {
-          statement.bindNull(15)
+          statement.bindNull(16)
         } else {
-          statement.bindLong(15, _tmpHrMax.toLong())
+          statement.bindLong(16, _tmpHrMax.toLong())
         }
         val _tmpHrEnd: Int? = entity.hrEnd
         if (_tmpHrEnd == null) {
-          statement.bindNull(16)
+          statement.bindNull(17)
         } else {
-          statement.bindLong(16, _tmpHrEnd.toLong())
+          statement.bindLong(17, _tmpHrEnd.toLong())
         }
         val _tmpHrAfter60s: Int? = entity.hrAfter60s
         if (_tmpHrAfter60s == null) {
-          statement.bindNull(17)
+          statement.bindNull(18)
         } else {
-          statement.bindLong(17, _tmpHrAfter60s.toLong())
+          statement.bindLong(18, _tmpHrAfter60s.toLong())
         }
         val _tmpHrr60: Int? = entity.hrr60
         if (_tmpHrr60 == null) {
-          statement.bindNull(18)
+          statement.bindNull(19)
         } else {
-          statement.bindLong(18, _tmpHrr60.toLong())
+          statement.bindLong(19, _tmpHrr60.toLong())
         }
         val _tmpRestAfterMs: Long? = entity.restAfterMs
         if (_tmpRestAfterMs == null) {
-          statement.bindNull(19)
+          statement.bindNull(20)
         } else {
-          statement.bindLong(19, _tmpRestAfterMs)
+          statement.bindLong(20, _tmpRestAfterMs)
         }
         val _tmpMeta: RecordMeta = entity.meta
-        statement.bindLong(20, _tmpMeta.createdAt)
-        statement.bindLong(21, _tmpMeta.updatedAt)
+        statement.bindLong(21, _tmpMeta.createdAt)
+        statement.bindLong(22, _tmpMeta.updatedAt)
         val _tmpDeletedAt: Long? = _tmpMeta.deletedAt
         if (_tmpDeletedAt == null) {
-          statement.bindNull(22)
+          statement.bindNull(23)
         } else {
-          statement.bindLong(22, _tmpDeletedAt)
+          statement.bindLong(23, _tmpDeletedAt)
         }
-        statement.bindText(23, __SyncState_enumToString(_tmpMeta.syncState))
+        statement.bindText(24, __SyncState_enumToString(_tmpMeta.syncState))
       }
     }, object : EntityDeleteOrUpdateAdapter<AttemptEntity>() {
-      protected override fun createQuery(): String = "UPDATE `attempt` SET `id` = ?,`sessionId` = ?,`problemId` = ?,`ordinal` = ?,`startsNewBoulder` = ?,`startedAt` = ?,`endedAt` = ?,`outcome` = ?,`gradeValue` = ?,`gradeSystem` = ?,`topMoveReached` = ?,`climbHeightMeters` = ?,`boardAngleDegrees` = ?,`hrAvg` = ?,`hrMax` = ?,`hrEnd` = ?,`hrAfter60s` = ?,`hrr60` = ?,`restAfterMs` = ?,`createdAt` = ?,`updatedAt` = ?,`deletedAt` = ?,`syncState` = ? WHERE `id` = ?"
+      protected override fun createQuery(): String = "UPDATE `attempt` SET `id` = ?,`sessionId` = ?,`problemId` = ?,`ordinal` = ?,`kind` = ?,`startsNewBoulder` = ?,`startedAt` = ?,`endedAt` = ?,`outcome` = ?,`gradeValue` = ?,`gradeSystem` = ?,`topMoveReached` = ?,`climbHeightMeters` = ?,`boardAngleDegrees` = ?,`hrAvg` = ?,`hrMax` = ?,`hrEnd` = ?,`hrAfter60s` = ?,`hrr60` = ?,`restAfterMs` = ?,`createdAt` = ?,`updatedAt` = ?,`deletedAt` = ?,`syncState` = ? WHERE `id` = ?"
 
       protected override fun bind(statement: SQLiteStatement, entity: AttemptEntity) {
         statement.bindText(1, entity.id)
@@ -156,98 +158,99 @@ public class AttemptDao_Impl(
           statement.bindText(3, _tmpProblemId)
         }
         statement.bindLong(4, entity.ordinal.toLong())
+        statement.bindText(5, __AttemptKind_enumToString(entity.kind))
         val _tmp: Int = if (entity.startsNewBoulder) 1 else 0
-        statement.bindLong(5, _tmp.toLong())
-        statement.bindLong(6, entity.startedAt)
+        statement.bindLong(6, _tmp.toLong())
+        statement.bindLong(7, entity.startedAt)
         val _tmpEndedAt: Long? = entity.endedAt
         if (_tmpEndedAt == null) {
-          statement.bindNull(7)
+          statement.bindNull(8)
         } else {
-          statement.bindLong(7, _tmpEndedAt)
+          statement.bindLong(8, _tmpEndedAt)
         }
         val _tmpOutcome: AttemptOutcome? = entity.outcome
         if (_tmpOutcome == null) {
-          statement.bindNull(8)
+          statement.bindNull(9)
         } else {
-          statement.bindText(8, __AttemptOutcome_enumToString(_tmpOutcome))
+          statement.bindText(9, __AttemptOutcome_enumToString(_tmpOutcome))
         }
         val _tmpGradeValue: Int? = entity.gradeValue
         if (_tmpGradeValue == null) {
-          statement.bindNull(9)
+          statement.bindNull(10)
         } else {
-          statement.bindLong(9, _tmpGradeValue.toLong())
+          statement.bindLong(10, _tmpGradeValue.toLong())
         }
         val _tmpGradeSystem: GradeSystem? = entity.gradeSystem
         if (_tmpGradeSystem == null) {
-          statement.bindNull(10)
+          statement.bindNull(11)
         } else {
-          statement.bindText(10, __GradeSystem_enumToString(_tmpGradeSystem))
+          statement.bindText(11, __GradeSystem_enumToString(_tmpGradeSystem))
         }
         val _tmpTopMoveReached: Int? = entity.topMoveReached
         if (_tmpTopMoveReached == null) {
-          statement.bindNull(11)
+          statement.bindNull(12)
         } else {
-          statement.bindLong(11, _tmpTopMoveReached.toLong())
+          statement.bindLong(12, _tmpTopMoveReached.toLong())
         }
         val _tmpClimbHeightMeters: Double? = entity.climbHeightMeters
         if (_tmpClimbHeightMeters == null) {
-          statement.bindNull(12)
+          statement.bindNull(13)
         } else {
-          statement.bindDouble(12, _tmpClimbHeightMeters)
+          statement.bindDouble(13, _tmpClimbHeightMeters)
         }
         val _tmpBoardAngleDegrees: Int? = entity.boardAngleDegrees
         if (_tmpBoardAngleDegrees == null) {
-          statement.bindNull(13)
+          statement.bindNull(14)
         } else {
-          statement.bindLong(13, _tmpBoardAngleDegrees.toLong())
+          statement.bindLong(14, _tmpBoardAngleDegrees.toLong())
         }
         val _tmpHrAvg: Int? = entity.hrAvg
         if (_tmpHrAvg == null) {
-          statement.bindNull(14)
+          statement.bindNull(15)
         } else {
-          statement.bindLong(14, _tmpHrAvg.toLong())
+          statement.bindLong(15, _tmpHrAvg.toLong())
         }
         val _tmpHrMax: Int? = entity.hrMax
         if (_tmpHrMax == null) {
-          statement.bindNull(15)
+          statement.bindNull(16)
         } else {
-          statement.bindLong(15, _tmpHrMax.toLong())
+          statement.bindLong(16, _tmpHrMax.toLong())
         }
         val _tmpHrEnd: Int? = entity.hrEnd
         if (_tmpHrEnd == null) {
-          statement.bindNull(16)
+          statement.bindNull(17)
         } else {
-          statement.bindLong(16, _tmpHrEnd.toLong())
+          statement.bindLong(17, _tmpHrEnd.toLong())
         }
         val _tmpHrAfter60s: Int? = entity.hrAfter60s
         if (_tmpHrAfter60s == null) {
-          statement.bindNull(17)
+          statement.bindNull(18)
         } else {
-          statement.bindLong(17, _tmpHrAfter60s.toLong())
+          statement.bindLong(18, _tmpHrAfter60s.toLong())
         }
         val _tmpHrr60: Int? = entity.hrr60
         if (_tmpHrr60 == null) {
-          statement.bindNull(18)
+          statement.bindNull(19)
         } else {
-          statement.bindLong(18, _tmpHrr60.toLong())
+          statement.bindLong(19, _tmpHrr60.toLong())
         }
         val _tmpRestAfterMs: Long? = entity.restAfterMs
         if (_tmpRestAfterMs == null) {
-          statement.bindNull(19)
+          statement.bindNull(20)
         } else {
-          statement.bindLong(19, _tmpRestAfterMs)
+          statement.bindLong(20, _tmpRestAfterMs)
         }
         val _tmpMeta: RecordMeta = entity.meta
-        statement.bindLong(20, _tmpMeta.createdAt)
-        statement.bindLong(21, _tmpMeta.updatedAt)
+        statement.bindLong(21, _tmpMeta.createdAt)
+        statement.bindLong(22, _tmpMeta.updatedAt)
         val _tmpDeletedAt: Long? = _tmpMeta.deletedAt
         if (_tmpDeletedAt == null) {
-          statement.bindNull(22)
+          statement.bindNull(23)
         } else {
-          statement.bindLong(22, _tmpDeletedAt)
+          statement.bindLong(23, _tmpDeletedAt)
         }
-        statement.bindText(23, __SyncState_enumToString(_tmpMeta.syncState))
-        statement.bindText(24, entity.id)
+        statement.bindText(24, __SyncState_enumToString(_tmpMeta.syncState))
+        statement.bindText(25, entity.id)
       }
     })
   }
@@ -267,6 +270,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -300,6 +304,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -398,7 +404,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
         } else {
           _result = null
         }
@@ -420,6 +426,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -454,6 +461,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -552,7 +561,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
           _result.add(_item)
         }
         _result
@@ -579,6 +588,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -612,6 +622,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -710,7 +722,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
         } else {
           _result = null
         }
@@ -760,6 +772,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -793,6 +806,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -891,7 +906,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
         } else {
           _result = null
         }
@@ -924,6 +939,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -957,6 +973,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -1055,7 +1073,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _result = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
         } else {
           _result = null
         }
@@ -1077,6 +1095,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -1111,6 +1130,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -1209,7 +1230,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
           _result.add(_item)
         }
         _result
@@ -1220,6 +1241,169 @@ public class AttemptDao_Impl(
   }
 
   public override suspend fun finishedBySession(sessionId: String): List<AttemptEntity> {
+    val _sql: String = """
+        |
+        |        SELECT * FROM attempt
+        |        WHERE sessionId = ? AND deletedAt IS NULL AND endedAt IS NOT NULL
+        |          AND kind = 'ATTEMPT'
+        |        ORDER BY ordinal
+        |        
+        """.trimMargin()
+    return performSuspending(__db, true, false) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        var _argIndex: Int = 1
+        _stmt.bindText(_argIndex, sessionId)
+        val _columnIndexOfId: Int = getColumnIndexOrThrow(_stmt, "id")
+        val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
+        val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
+        val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
+        val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
+        val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
+        val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
+        val _columnIndexOfOutcome: Int = getColumnIndexOrThrow(_stmt, "outcome")
+        val _columnIndexOfGradeValue: Int = getColumnIndexOrThrow(_stmt, "gradeValue")
+        val _columnIndexOfGradeSystem: Int = getColumnIndexOrThrow(_stmt, "gradeSystem")
+        val _columnIndexOfTopMoveReached: Int = getColumnIndexOrThrow(_stmt, "topMoveReached")
+        val _columnIndexOfClimbHeightMeters: Int = getColumnIndexOrThrow(_stmt, "climbHeightMeters")
+        val _columnIndexOfBoardAngleDegrees: Int = getColumnIndexOrThrow(_stmt, "boardAngleDegrees")
+        val _columnIndexOfHrAvg: Int = getColumnIndexOrThrow(_stmt, "hrAvg")
+        val _columnIndexOfHrMax: Int = getColumnIndexOrThrow(_stmt, "hrMax")
+        val _columnIndexOfHrEnd: Int = getColumnIndexOrThrow(_stmt, "hrEnd")
+        val _columnIndexOfHrAfter60s: Int = getColumnIndexOrThrow(_stmt, "hrAfter60s")
+        val _columnIndexOfHrr60: Int = getColumnIndexOrThrow(_stmt, "hrr60")
+        val _columnIndexOfRestAfterMs: Int = getColumnIndexOrThrow(_stmt, "restAfterMs")
+        val _columnIndexOfCreatedAt: Int = getColumnIndexOrThrow(_stmt, "createdAt")
+        val _columnIndexOfUpdatedAt: Int = getColumnIndexOrThrow(_stmt, "updatedAt")
+        val _columnIndexOfDeletedAt: Int = getColumnIndexOrThrow(_stmt, "deletedAt")
+        val _columnIndexOfSyncState: Int = getColumnIndexOrThrow(_stmt, "syncState")
+        val _result: MutableList<AttemptEntity> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: AttemptEntity
+          val _tmpId: String
+          _tmpId = _stmt.getText(_columnIndexOfId)
+          val _tmpSessionId: String
+          _tmpSessionId = _stmt.getText(_columnIndexOfSessionId)
+          val _tmpProblemId: String?
+          if (_stmt.isNull(_columnIndexOfProblemId)) {
+            _tmpProblemId = null
+          } else {
+            _tmpProblemId = _stmt.getText(_columnIndexOfProblemId)
+          }
+          val _tmpOrdinal: Int
+          _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
+          val _tmpStartsNewBoulder: Boolean
+          val _tmp: Int
+          _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
+          _tmpStartsNewBoulder = _tmp != 0
+          val _tmpStartedAt: Long
+          _tmpStartedAt = _stmt.getLong(_columnIndexOfStartedAt)
+          val _tmpEndedAt: Long?
+          if (_stmt.isNull(_columnIndexOfEndedAt)) {
+            _tmpEndedAt = null
+          } else {
+            _tmpEndedAt = _stmt.getLong(_columnIndexOfEndedAt)
+          }
+          val _tmpOutcome: AttemptOutcome?
+          if (_stmt.isNull(_columnIndexOfOutcome)) {
+            _tmpOutcome = null
+          } else {
+            _tmpOutcome = __AttemptOutcome_stringToEnum(_stmt.getText(_columnIndexOfOutcome))
+          }
+          val _tmpGradeValue: Int?
+          if (_stmt.isNull(_columnIndexOfGradeValue)) {
+            _tmpGradeValue = null
+          } else {
+            _tmpGradeValue = _stmt.getLong(_columnIndexOfGradeValue).toInt()
+          }
+          val _tmpGradeSystem: GradeSystem?
+          if (_stmt.isNull(_columnIndexOfGradeSystem)) {
+            _tmpGradeSystem = null
+          } else {
+            _tmpGradeSystem = __GradeSystem_stringToEnum(_stmt.getText(_columnIndexOfGradeSystem))
+          }
+          val _tmpTopMoveReached: Int?
+          if (_stmt.isNull(_columnIndexOfTopMoveReached)) {
+            _tmpTopMoveReached = null
+          } else {
+            _tmpTopMoveReached = _stmt.getLong(_columnIndexOfTopMoveReached).toInt()
+          }
+          val _tmpClimbHeightMeters: Double?
+          if (_stmt.isNull(_columnIndexOfClimbHeightMeters)) {
+            _tmpClimbHeightMeters = null
+          } else {
+            _tmpClimbHeightMeters = _stmt.getDouble(_columnIndexOfClimbHeightMeters)
+          }
+          val _tmpBoardAngleDegrees: Int?
+          if (_stmt.isNull(_columnIndexOfBoardAngleDegrees)) {
+            _tmpBoardAngleDegrees = null
+          } else {
+            _tmpBoardAngleDegrees = _stmt.getLong(_columnIndexOfBoardAngleDegrees).toInt()
+          }
+          val _tmpHrAvg: Int?
+          if (_stmt.isNull(_columnIndexOfHrAvg)) {
+            _tmpHrAvg = null
+          } else {
+            _tmpHrAvg = _stmt.getLong(_columnIndexOfHrAvg).toInt()
+          }
+          val _tmpHrMax: Int?
+          if (_stmt.isNull(_columnIndexOfHrMax)) {
+            _tmpHrMax = null
+          } else {
+            _tmpHrMax = _stmt.getLong(_columnIndexOfHrMax).toInt()
+          }
+          val _tmpHrEnd: Int?
+          if (_stmt.isNull(_columnIndexOfHrEnd)) {
+            _tmpHrEnd = null
+          } else {
+            _tmpHrEnd = _stmt.getLong(_columnIndexOfHrEnd).toInt()
+          }
+          val _tmpHrAfter60s: Int?
+          if (_stmt.isNull(_columnIndexOfHrAfter60s)) {
+            _tmpHrAfter60s = null
+          } else {
+            _tmpHrAfter60s = _stmt.getLong(_columnIndexOfHrAfter60s).toInt()
+          }
+          val _tmpHrr60: Int?
+          if (_stmt.isNull(_columnIndexOfHrr60)) {
+            _tmpHrr60 = null
+          } else {
+            _tmpHrr60 = _stmt.getLong(_columnIndexOfHrr60).toInt()
+          }
+          val _tmpRestAfterMs: Long?
+          if (_stmt.isNull(_columnIndexOfRestAfterMs)) {
+            _tmpRestAfterMs = null
+          } else {
+            _tmpRestAfterMs = _stmt.getLong(_columnIndexOfRestAfterMs)
+          }
+          val _tmpMeta: RecordMeta
+          val _tmpCreatedAt: Long
+          _tmpCreatedAt = _stmt.getLong(_columnIndexOfCreatedAt)
+          val _tmpUpdatedAt: Long
+          _tmpUpdatedAt = _stmt.getLong(_columnIndexOfUpdatedAt)
+          val _tmpDeletedAt: Long?
+          if (_stmt.isNull(_columnIndexOfDeletedAt)) {
+            _tmpDeletedAt = null
+          } else {
+            _tmpDeletedAt = _stmt.getLong(_columnIndexOfDeletedAt)
+          }
+          val _tmpSyncState: SyncState
+          _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
+          _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
+          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
+  public override suspend fun finishedBlocks(sessionId: String): List<AttemptEntity> {
     val _sql: String = """
         |
         |        SELECT * FROM attempt
@@ -1236,6 +1420,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -1270,6 +1455,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -1368,7 +1555,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
           _result.add(_item)
         }
         _result
@@ -1389,6 +1576,7 @@ public class AttemptDao_Impl(
         val _columnIndexOfSessionId: Int = getColumnIndexOrThrow(_stmt, "sessionId")
         val _columnIndexOfProblemId: Int = getColumnIndexOrThrow(_stmt, "problemId")
         val _columnIndexOfOrdinal: Int = getColumnIndexOrThrow(_stmt, "ordinal")
+        val _columnIndexOfKind: Int = getColumnIndexOrThrow(_stmt, "kind")
         val _columnIndexOfStartsNewBoulder: Int = getColumnIndexOrThrow(_stmt, "startsNewBoulder")
         val _columnIndexOfStartedAt: Int = getColumnIndexOrThrow(_stmt, "startedAt")
         val _columnIndexOfEndedAt: Int = getColumnIndexOrThrow(_stmt, "endedAt")
@@ -1423,6 +1611,8 @@ public class AttemptDao_Impl(
           }
           val _tmpOrdinal: Int
           _tmpOrdinal = _stmt.getLong(_columnIndexOfOrdinal).toInt()
+          val _tmpKind: AttemptKind
+          _tmpKind = __AttemptKind_stringToEnum(_stmt.getText(_columnIndexOfKind))
           val _tmpStartsNewBoulder: Boolean
           val _tmp: Int
           _tmp = _stmt.getLong(_columnIndexOfStartsNewBoulder).toInt()
@@ -1521,7 +1711,7 @@ public class AttemptDao_Impl(
           val _tmpSyncState: SyncState
           _tmpSyncState = __SyncState_stringToEnum(_stmt.getText(_columnIndexOfSyncState))
           _tmpMeta = RecordMeta(_tmpCreatedAt,_tmpUpdatedAt,_tmpDeletedAt,_tmpSyncState)
-          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
+          _item = AttemptEntity(_tmpId,_tmpSessionId,_tmpProblemId,_tmpOrdinal,_tmpKind,_tmpStartsNewBoulder,_tmpStartedAt,_tmpEndedAt,_tmpOutcome,_tmpGradeValue,_tmpGradeSystem,_tmpTopMoveReached,_tmpClimbHeightMeters,_tmpBoardAngleDegrees,_tmpHrAvg,_tmpHrMax,_tmpHrEnd,_tmpHrAfter60s,_tmpHrr60,_tmpRestAfterMs,_tmpMeta)
           _result.add(_item)
         }
         _result
@@ -1603,6 +1793,7 @@ public class AttemptDao_Impl(
         |        WHERE sessionId = ?
         |          AND deletedAt IS NULL
         |          AND endedAt IS NOT NULL
+        |          AND kind = 'ATTEMPT'
         |        
         """.trimMargin()
     return performSuspending(__db, true, false) { _connection ->
@@ -1676,6 +1867,7 @@ public class AttemptDao_Impl(
         |        WHERE a.deletedAt IS NULL
         |          AND a.endedAt IS NOT NULL
         |          AND a.gradeValue IS NOT NULL
+        |          AND a.kind = 'ATTEMPT'
         |          AND s.deletedAt IS NULL
         |          AND s.state = 'FINISHED'
         |          AND a.startedAt >= ?
@@ -1704,39 +1896,6 @@ public class AttemptDao_Impl(
           val _tmpFlashCount: Int
           _tmpFlashCount = _stmt.getLong(_columnIndexOfFlashCount).toInt()
           _item = GradeBucket(_tmpGradeValue,_tmpAttemptCount,_tmpSendCount,_tmpFlashCount)
-          _result.add(_item)
-        }
-        _result
-      } finally {
-        _stmt.close()
-      }
-    }
-  }
-
-  public override suspend fun sessionsMissingClimbHeight(): List<String> {
-    val _sql: String = """
-        |
-        |        SELECT DISTINCT a.sessionId FROM attempt a
-        |        WHERE a.deletedAt IS NULL
-        |          AND a.endedAt IS NOT NULL
-        |          AND a.climbHeightMeters IS NULL
-        |          AND EXISTS (
-        |              SELECT 1 FROM sensor_chunk c
-        |              WHERE c.sessionId = a.sessionId AND c.sensor = 'PRESSURE'
-        |          )
-        |          AND EXISTS (
-        |              SELECT 1 FROM session s
-        |              WHERE s.id = a.sessionId AND s.deletedAt IS NULL AND s.state = 'FINISHED'
-        |          )
-        |        
-        """.trimMargin()
-    return performSuspending(__db, true, false) { _connection ->
-      val _stmt: SQLiteStatement = _connection.prepare(_sql)
-      try {
-        val _result: MutableList<String> = mutableListOf()
-        while (_stmt.step()) {
-          val _item: String
-          _item = _stmt.getText(0)
           _result.add(_item)
         }
         _result
@@ -1857,6 +2016,11 @@ public class AttemptDao_Impl(
     }
   }
 
+  private fun __AttemptKind_enumToString(_value: AttemptKind): String = when (_value) {
+    AttemptKind.ATTEMPT -> "ATTEMPT"
+    AttemptKind.MOVE_TEST -> "MOVE_TEST"
+  }
+
   private fun __AttemptOutcome_enumToString(_value: AttemptOutcome): String = when (_value) {
     AttemptOutcome.FLASH -> "FLASH"
     AttemptOutcome.TOP -> "TOP"
@@ -1873,6 +2037,12 @@ public class AttemptDao_Impl(
   private fun __SyncState_enumToString(_value: SyncState): String = when (_value) {
     SyncState.PENDING -> "PENDING"
     SyncState.SYNCED -> "SYNCED"
+  }
+
+  private fun __AttemptKind_stringToEnum(_value: String): AttemptKind = when (_value) {
+    "ATTEMPT" -> AttemptKind.ATTEMPT
+    "MOVE_TEST" -> AttemptKind.MOVE_TEST
+    else -> throw IllegalArgumentException("Can't convert value to enum, unknown value: " + _value)
   }
 
   private fun __AttemptOutcome_stringToEnum(_value: String): AttemptOutcome = when (_value) {

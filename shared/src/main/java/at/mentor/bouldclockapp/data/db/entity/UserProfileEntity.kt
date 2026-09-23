@@ -34,6 +34,33 @@ data class UserProfileEntity(
 
     val sex: BiologicalSex,
 
+    /**
+     * Koerpergroesse in Zentimetern.
+     *
+     * Fuer den Grundumsatz nach Mifflin-St Jeor. Optional, weil bestehende
+     * Profile sie nicht haben - fehlt sie, faellt die Rechnung auf die
+     * MET-Naeherung zurueck, die nur das Gewicht braucht.
+     */
+    val heightCm: Int? = null,
+
+    /**
+     * Gemessener Ruhepuls.
+     *
+     * Der wichtigste einzelne Wert fuer die Kalorienrechnung: er geht doppelt
+     * ein - einmal in die Pulsreserve, einmal in die daraus geschaetzte
+     * Sauerstoffaufnahme. Selbst gemessen statt von der Plattform uebernommen,
+     * damit dieselbe Zahl spaeter auch auf einer Garmin entsteht.
+     */
+    val restingHrBpm: Int? = null,
+
+    /**
+     * Hoechster je beobachteter Puls.
+     *
+     * Wird automatisch mitgefuehrt, wenn eine Session darueber hinausgeht. Nach
+     * ein paar harten Abenden ist das genauer als jede Altersformel.
+     */
+    val maxHrBpm: Int? = null,
+
     @Embedded val meta: RecordMeta,
 ) {
     fun ageInYears(today: LocalDate = LocalDate.now()): Int = today.year - birthYear

@@ -63,7 +63,29 @@ interface AttemptDao {
     @Query("SELECT * FROM attempt WHERE sessionId = :sessionId ORDER BY ordinal")
     suspend fun allBySession(sessionId: String): List<AttemptEntity>
 
-    /** Beendete Versuche in zeitlicher Reihenfolge - Grundlage der Zusammenfassung. */
+    /**
+     * Beendete **Versuche** in zeitlicher Reihenfolge.
+     *
+     * Ohne Zugproben: die zaehlen weder in die Statistik noch in die
+     * Boulder-Gruppierung, und eine Hoehe haben sie auch nicht - man startet
+     * dabei nicht vom Boden.
+     */
+    @Query(
+        """
+        SELECT * FROM attempt
+        WHERE sessionId = :sessionId AND deletedAt IS NULL AND endedAt IS NOT NULL
+          AND kind = 'ATTEMPT'
+        ORDER BY ordinal
+        """,
+    )
+    suspend fun finishedBySession(sessionId: String): List<AttemptEntity>
+
+    /**
+     * Alle beendeten Bloecke an der Wand, Zugproben eingeschlossen.
+     *
+     * Fuer Energie und Erholung: koerperlich ist eine Zugprobe Arbeit, und sie
+     * unterbricht eine Pause genauso wie ein Versuch.
+     */
     @Query(
         """
         SELECT * FROM attempt
@@ -71,7 +93,7 @@ interface AttemptDao {
         ORDER BY ordinal
         """,
     )
-    suspend fun finishedBySession(sessionId: String): List<AttemptEntity>
+    suspend fun finishedBlocks(sessionId: String): List<AttemptEntity>
 
     /**
      * Endgueltig loeschen.
@@ -145,6 +167,7 @@ interface AttemptDao {
         WHERE sessionId = :sessionId
           AND deletedAt IS NULL
           AND endedAt IS NOT NULL
+          AND kind = 'ATTEMPT'
         """,
     )
     suspend fun aggregate(sessionId: String): AttemptAggregate
@@ -169,6 +192,7 @@ interface AttemptDao {
         WHERE a.deletedAt IS NULL
           AND a.endedAt IS NOT NULL
           AND a.gradeValue IS NOT NULL
+          AND a.kind = 'ATTEMPT'
           AND s.deletedAt IS NULL
           AND s.state = 'FINISHED'
           AND a.startedAt >= :since
@@ -177,31 +201,6 @@ interface AttemptDao {
         """,
     )
     fun observeGradeHistogram(since: Long): Flow<List<GradeBucket>>
-
-    /**
-     * Beendete Sessions, in denen Versuche ohne Kletterhoehe stehen, obwohl
-     * eine Luftdruckaufzeichnung vorliegt.
-     *
-     * Kandidaten fuers Nachtragen. Der Umweg ueber `sensor_chunk` spart das
-     * Lesen von Dateien, die es gar nicht gibt.
-     */
-    @Query(
-        """
-        SELECT DISTINCT a.sessionId FROM attempt a
-        WHERE a.deletedAt IS NULL
-          AND a.endedAt IS NOT NULL
-          AND a.climbHeightMeters IS NULL
-          AND EXISTS (
-              SELECT 1 FROM sensor_chunk c
-              WHERE c.sessionId = a.sessionId AND c.sensor = 'PRESSURE'
-          )
-          AND EXISTS (
-              SELECT 1 FROM session s
-              WHERE s.id = a.sessionId AND s.deletedAt IS NULL AND s.state = 'FINISHED'
-          )
-        """,
-    )
-    suspend fun sessionsMissingClimbHeight(): List<String>
 
     /** Ordnet einen Versuch einem Boulder zu - das Zusammenfuehren am Handy. */
     @Query(

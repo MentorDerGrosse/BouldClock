@@ -42,6 +42,7 @@ import at.mentor.bouldclockapp.core.model.SessionType
 import at.mentor.bouldclockapp.presentation.session.HardwareTriggerBus
 import at.mentor.bouldclockapp.presentation.components.RestDurationScreen
 import at.mentor.bouldclockapp.presentation.profile.ProfileSetupScreen
+import at.mentor.bouldclockapp.presentation.profile.RestingHrScreen
 import at.mentor.bouldclockapp.presentation.progress.ProgressScreen
 import at.mentor.bouldclockapp.presentation.session.LiveMetricsScreen
 import at.mentor.bouldclockapp.presentation.session.ProfileState
@@ -100,13 +101,31 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
             }
 
             var showProgress by remember { mutableStateOf(false) }
+            var showRestingHr by remember { mutableStateOf(false) }
+            val needsRestingHr by viewModel.needsRestingHr.collectAsStateWithLifecycle()
 
             when (val state = uiState) {
                 // Kurz leer statt aufblitzendem Startbildschirm - sonst legt ein
                 // schneller Tap eine zweite Session neben der offenen an.
                 SessionUiState.Restoring -> Box(Modifier.fillMaxSize())
 
-                SessionUiState.NoSession -> if (showProgress) {
+                // Beim ersten Start einmal nach dem Ruhepuls fragen - mit
+                // "Später" daneben, damit niemand zum Messen gezwungen wird.
+                SessionUiState.NoSession -> if (showRestingHr || needsRestingHr) {
+                    val restingState by viewModel.restingHr.collectAsStateWithLifecycle()
+                    ScreenScaffold {
+                        RestingHrScreen(
+                            state = restingState,
+                            firstRun = needsRestingHr && !showRestingHr,
+                            onStart = viewModel::measureRestingHr,
+                            onBack = {
+                                viewModel.dismissRestingHr()
+                                viewModel.skipRestingHr()
+                                showRestingHr = false
+                            },
+                        )
+                    }
+                } else if (showProgress) {
                     val summaries by viewModel.recentSummaries.collectAsStateWithLifecycle()
                     ProgressScreen(
                         summaries = summaries,
@@ -119,6 +138,7 @@ fun WearApp(triggerBus: HardwareTriggerBus) {
                         onToggleScale = viewModel::toggleGradeSystem,
                         onStart = viewModel::chooseSession,
                         onShowProgress = { showProgress = true },
+                        onMeasureRestingHr = { showRestingHr = true },
                     )
                 }
 
@@ -231,6 +251,7 @@ private fun StartSessionScreen(
     onToggleScale: () -> Unit,
     onStart: (SessionType) -> Unit,
     onShowProgress: () -> Unit,
+    onMeasureRestingHr: () -> Unit,
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -267,6 +288,20 @@ private fun StartSessionScreen(
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
                     Text("Fortschritt")
+                }
+            }
+
+            // Kein Sessionstart, deshalb gedaempft: eine Messung, die man
+            // einmal macht und dann monatelang nicht mehr.
+            item {
+                Button(
+                    onClick = onMeasureRestingHr,
+                    modifier = Modifier.fillMaxWidth()
+                        .transformedHeight(this, transformationSpec),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
+                    Text("Ruhepuls messen")
                 }
             }
 

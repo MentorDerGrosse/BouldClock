@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="at.mentor.bouldclockapp.core.ReadinessTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-22T23:49:20.897Z" hostname="fedora" time="0.008">
+  <properties/>
+  <testcase name="eine sehr harte Session gestern zaehlt nach" classname="at.mentor.bouldclockapp.core.ReadinessTest" time="0.003"/>
+  <testcase name="drei Tage Pause ist ein guter Tag" classname="at.mentor.bouldclockapp.core.ReadinessTest" time="0.001"/>
+  <testcase name="es gibt immer eine Begruendung" classname="at.mentor.bouldclockapp.core.ReadinessTest" time="0.001"/>
+  <testcase name="ohne Sessions gibt es kein Urteil" classname="at.mentor.bouldclockapp.core.ReadinessTest" time="0.0"/>
+  <testcase name="heute schon geklettert heisst locker machen" classname="at.mentor.bouldclockapp.core.ReadinessTest" time="0.0"/>
+  <testcase name="eine harte Woche daempft" classname="at.mentor.bouldclockapp.core.ReadinessTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

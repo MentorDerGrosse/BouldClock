@@ -30,6 +30,26 @@ fun formatMeters(meters: Double): String = when {
 
 fun formatKcal(kcal: Double): String = "${kcal.roundToInt()} kcal"
 
+/** Puls mit Einheit - "130 bpm". */
+fun formatBpm(bpm: Int): String = "$bpm bpm"
+
+/** Pulsspanne - "54–163 bpm", eine Einheit statt zwei. */
+fun formatBpmRange(min: Int, max: Int): String = "$min–$max bpm"
+
+/**
+ * Herzfrequenz-Erholung - "−12 Schläge".
+ *
+ * Ohne Einheit sagt "−12" nichts: Schlaege, Prozent, Sekunden? Das Minus
+ * gehoert dazu, es ist ein Abfall.
+ */
+fun formatRecovery(drop: Int): String = "−$drop Schläge"
+
+/** Dauer mit Einheit - "8:58 min". Ohne sie raet man zwischen Minuten und Stunden. */
+fun formatDurationWithUnit(ms: Long): String {
+    val hours = ms / 3_600_000L
+    return if (hours > 0) "${formatDuration(ms)} h" else "${formatDuration(ms)} min"
+}
+
 /** "42:07" unter einer Stunde, sonst "1:24:07". */
 fun formatDuration(ms: Long): String {
     val total = (ms / 1_000L).coerceAtLeast(0L)
@@ -68,6 +88,7 @@ fun formatDurationShort(ms: Long): String {
 fun label(bucket: PeriodBucket): String = label(bucket.start, bucket.period)
 
 fun label(start: LocalDate, period: Period): String = when (period) {
+    Period.ALL -> "Gesamt"
     Period.DAY -> "${start.dayOfWeek.getDisplayName(TextStyle.SHORT, AT)}, ${start.dayOfMonth}.${start.monthValue}."
     Period.WEEK -> "KW ${start.get(WeekFields.ISO.weekOfWeekBasedYear())}"
     Period.MONTH -> start.month.getDisplayName(TextStyle.FULL, AT)
@@ -76,6 +97,7 @@ fun label(start: LocalDate, period: Period): String = when (period) {
 
 /** Kurzform fuer enge Achsen: "21.9.", "KW 38", "Sep", "2026". */
 fun axisLabel(bucket: PeriodBucket): String = when (bucket.period) {
+    Period.ALL -> "Gesamt"
     Period.DAY -> "${bucket.start.dayOfMonth}.${bucket.start.monthValue}."
     Period.WEEK -> bucket.start.get(WeekFields.ISO.weekOfWeekBasedYear()).toString()
     Period.MONTH -> bucket.start.month.getDisplayName(TextStyle.SHORT, AT)
@@ -86,3 +108,6 @@ fun axisLabel(bucket: PeriodBucket): String = when (bucket.period) {
 fun formatTimes(times: Double): String = String.format(AT, "%.1f ×", times)
 
 fun formatPercent(share: Double): String = "${(share * 100).roundToInt()} %"
+
+/** Sessions je Woche - "1,8 pro Woche". */
+fun formatPerWeek(value: Double): String = String.format(AT, "%.1f pro Woche", value)

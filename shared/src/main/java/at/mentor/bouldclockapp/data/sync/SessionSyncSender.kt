@@ -2,6 +2,7 @@ package at.mentor.bouldclockapp.data.sync
 
 import android.content.Context
 import at.mentor.bouldclockapp.core.diagnostics.Diagnostics
+import at.mentor.bouldclockapp.core.model.SensorKind
 import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
@@ -129,10 +130,24 @@ class SessionSyncSender(
             if (ok) {
                 repository.markChunkSynced(chunk)
                 sent++
+                val size = file.length()
+
+                // Datei loeschen, Zeile behalten: das Handy ist ab jetzt das
+                // Archiv, und die Metadaten sollen trotzdem hier bleiben - sonst
+                // sieht die Uhr eine Session ohne Aufzeichnung.
+                //
+                // **Ausser Luftdruck.** Aus ihm rechnet die Uhr die Kletterhoehe,
+                // auch nachtraeglich - und er ist mit rund 17 KB gegen 1 MB fuer
+                // Beschleunigung und Gyro der kleinste Posten. Zu loeschen, was
+                // man selbst noch braucht, spart nichts und kostet die Hoehen.
+                val removed = chunk.sensor != SensorKind.PRESSURE && file.delete()
+                file.parentFile?.takeIf { it.list()?.isEmpty() == true }?.delete()
+
                 Diagnostics.log(
                     context,
                     TAG,
-                    "${chunk.relativePath} gesendet, ${file.length()} Byte",
+                    "${chunk.relativePath} gesendet, $size Byte" +
+                        if (removed) " - lokal geloescht" else "",
                 )
             }
         }

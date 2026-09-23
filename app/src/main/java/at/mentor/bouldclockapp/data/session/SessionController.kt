@@ -5,6 +5,8 @@ import at.mentor.bouldclockapp.core.metrics.AttemptRun
 import at.mentor.bouldclockapp.core.metrics.Barometry
 import at.mentor.bouldclockapp.core.metrics.PressureTraceSource
 import at.mentor.bouldclockapp.core.metrics.SessionMetrics
+import at.mentor.bouldclockapp.core.model.AttemptKind
+import at.mentor.bouldclockapp.data.db.SessionAnalysis
 import at.mentor.bouldclockapp.core.metrics.groupRuns
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.GradeSystem
@@ -20,6 +22,7 @@ import at.mentor.bouldclockapp.data.db.dao.HrSampleDao
 import at.mentor.bouldclockapp.data.db.dao.MetricSampleDao
 import at.mentor.bouldclockapp.data.db.dao.SessionDao
 import at.mentor.bouldclockapp.data.db.dao.SessionSummaryDao
+import at.mentor.bouldclockapp.data.db.dao.UserProfileDao
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
 import at.mentor.bouldclockapp.data.db.entity.RecordMeta
 import at.mentor.bouldclockapp.data.db.entity.SessionEntity
@@ -53,6 +56,7 @@ class SessionController(
     private val hrSampleDao: HrSampleDao,
     private val metricSampleDao: MetricSampleDao,
     private val summaryDao: SessionSummaryDao,
+    private val userProfileDao: UserProfileDao,
     /**
      * Luftdruckverlauf fuer die Kletterhoehe. Fehlt er, bleibt die Hoehe leer -
      * die Zusammenfassung entsteht trotzdem.
@@ -177,7 +181,6 @@ class SessionController(
                         meta = last.meta.touched(now),
                     ),
                 )
-                settleHrr60(last.id)
             }
         }
 
@@ -414,7 +417,6 @@ class SessionController(
                     attemptDao.upsert(it.copy(outcome = AttemptOutcome.FAIL, meta = it.meta.touched(now)))
                 }
             }
-            settleHrr60(resting.lastAttemptId)
         }
 
         val finished = session.copy(
@@ -426,6 +428,12 @@ class SessionController(
 
         // Hoehen nachtragen, bevor aggregiert wird - das Aggregat summiert sie.
         applyClimbHeights(finished.id, now)
+
+        // Erholung erst jetzt, aus den fertigen Pulswerten und Blockzeiten.
+        // Frueher hing das an einem verzoegerten Auftrag, der abgebrochen wurde,
+        // sobald sich die Phase aenderte - und fehlte dadurch sporadisch.
+        SessionAnalysis.applyRecovery(attemptDao, hrSampleDao, finished.id, now)
+        SessionAnalysis.trackMaxHeartRate(hrSampleDao, userProfileDao, finished.id, now)
 
         val summary = writeSummary(finished, now)
 
@@ -483,6 +491,7 @@ class SessionController(
      */
     private suspend fun writeSummary(session: SessionEntity, now: Long): SessionSummaryEntity {
         val endedAt = session.endedAt ?: now
+        val energy = SessionAnalysis.energy(attemptDao, hrSampleDao, userProfileDao, session)
         val summary = buildSessionSummary(
             session = session,
             aggregate = attemptDao.aggregate(session.id),
@@ -492,8 +501,11 @@ class SessionController(
             hrMax = hrSampleDao.maxBetween(
                 session.id, session.startedAt, endedAt, SessionMetrics.MIN_HR_ACCURACY,
             ),
-            caloriesTotal = metricSampleDao.total(session.id, SessionMetric.CALORIES),
-            caloriesOnWall = caloriesOnWall(session.id),
+            // Selbst gerechnet statt von der Uhr uebernommen: Samsung meldete in
+            // einer echten Session 34 Mal 0,0 kcal. Der Wert der Plattform
+            // laeuft weiter ins Protokoll, zum Vergleich.
+            caloriesTotal = energy?.totalKcal,
+            caloriesOnWall = energy?.onWallKcal,
             now = now,
         )
         summaryDao.upsert(summary)
@@ -501,32 +513,43 @@ class SessionController(
     }
 
     /**
-     * Traegt Kletterhoehen in aelteren Sessions nach.
+     * Rechnet aeltere Sessions neu durch.
      *
-     * Noetig, weil die Auswertung frueher vor dem Wegschreiben lief und deshalb
-     * **nie** eine Hoehe bekam - die Luftdruckdateien liegen aber vollstaendig
-     * vor. Einmal beim Start, und nur dort, wo tatsaechlich etwas fehlt.
+     * Noetig, weil sich die Auswertung mehrfach geaendert hat: Kletterhoehen
+     * blieben frueher **immer** leer, weil die Rechnung vor dem Wegschreiben
+     * lief; die Erholung hing an einem Wettlauf; und die Kalorien kamen von der
+     * Uhr, die in einer echten Session 34 Mal 0,0 meldete. Die Rohwerte liegen
+     * alle noch da - Puls, Luftdruck, Blockzeiten.
      *
-     * Sessions, in denen der Sensor nichts Brauchbares hergab, bleiben
-     * Kandidaten und werden bei jedem Start erneut geprueft. Das kostet einen
-     * Dateizugriff und erspart eine Merkspalte.
+     * Laeuft beim Start ueber alle beendeten Sessions und schreibt nur, wo sich
+     * tatsaechlich eine Zahl aendert. Dadurch ist es selbstbegrenzend: ist
+     * einmal alles gerechnet, passiert beim naechsten Start nichts mehr.
      *
      * Gibt die Sessions zurueck, in denen sich etwas geaendert hat - die
      * gehoeren danach zum Handy.
      */
-    suspend fun backfillClimbHeights(): List<String> = mutex.withLock {
+    suspend fun backfillAnalysis(): List<String> = mutex.withLock {
         val now = clock()
         val running = _session.value?.id
 
-        attemptDao.sessionsMissingClimbHeight()
-            // Die laufende Session nicht anfassen - ihre Datei ist noch offen.
+        sessionDao.finishedIds()
+            // Die laufende Session nicht anfassen - ihre Dateien sind noch offen.
             .filterNot { it == running }
             .mapNotNull { sessionId ->
-                if (!applyClimbHeights(sessionId, now)) return@mapNotNull null
                 val session = sessionDao.byId(sessionId) ?: return@mapNotNull null
-                val touched = session.copy(meta = session.meta.touched(now))
-                sessionDao.upsert(touched)
-                writeSummary(touched, now)
+                val before = summaryDao.bySession(sessionId)
+
+                applyClimbHeights(sessionId, now)
+                SessionAnalysis.applyRecovery(attemptDao, hrSampleDao, sessionId, now)
+                SessionAnalysis.trackMaxHeartRate(hrSampleDao, userProfileDao, sessionId, now)
+
+                val after = writeSummary(session, now)
+                // computedAt aendert sich immer - es zaehlt nicht als Aenderung.
+                if (before?.copy(computedAt = 0L) == after.copy(computedAt = 0L)) {
+                    return@mapNotNull null
+                }
+
+                sessionDao.upsert(session.copy(meta = session.meta.touched(now)))
                 sessionId
             }
     }

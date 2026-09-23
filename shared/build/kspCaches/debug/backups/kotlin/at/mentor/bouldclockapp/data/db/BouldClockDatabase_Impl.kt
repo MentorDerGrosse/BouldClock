@@ -82,7 +82,7 @@ public class BouldClockDatabase_Impl : BouldClockDatabase() {
   }
 
   protected override fun createOpenDelegate(): RoomOpenDelegate {
-    val _openDelegate: RoomOpenDelegate = object : RoomOpenDelegate(7, "4a665b20eeac703b75eae5b3bbabe875", "5251df1d6630543b2d626a83cd412468") {
+    val _openDelegate: RoomOpenDelegate = object : RoomOpenDelegate(8, "e6e61542e5573bd1091a28d5934c0b7f", "e36cc0bb85608cc76105e5b21813f1d8") {
       public override fun createAllTables(connection: SQLiteConnection) {
         connection.execSQL("CREATE TABLE IF NOT EXISTS `gym` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `gradeSystem` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `problem` (`id` TEXT NOT NULL, `gymId` TEXT NOT NULL, `label` TEXT NOT NULL, `colorHex` TEXT, `gradeValue` INTEGER, `wallAngle` TEXT, `firstSentAt` INTEGER, `retiredAt` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`gymId`) REFERENCES `gym`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
@@ -91,7 +91,7 @@ public class BouldClockDatabase_Impl : BouldClockDatabase() {
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_session_gymId` ON `session` (`gymId`)")
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_session_startedAt` ON `session` (`startedAt`)")
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_session_state` ON `session` (`state`)")
-        connection.execSQL("CREATE TABLE IF NOT EXISTS `attempt` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `problemId` TEXT, `ordinal` INTEGER NOT NULL, `startsNewBoulder` INTEGER NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER, `outcome` TEXT, `gradeValue` INTEGER, `gradeSystem` TEXT, `topMoveReached` INTEGER, `climbHeightMeters` REAL, `boardAngleDegrees` INTEGER, `hrAvg` INTEGER, `hrMax` INTEGER, `hrEnd` INTEGER, `hrAfter60s` INTEGER, `hrr60` INTEGER, `restAfterMs` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`sessionId`) REFERENCES `session`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`problemId`) REFERENCES `problem`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `attempt` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `problemId` TEXT, `ordinal` INTEGER NOT NULL, `kind` TEXT NOT NULL, `startsNewBoulder` INTEGER NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER, `outcome` TEXT, `gradeValue` INTEGER, `gradeSystem` TEXT, `topMoveReached` INTEGER, `climbHeightMeters` REAL, `boardAngleDegrees` INTEGER, `hrAvg` INTEGER, `hrMax` INTEGER, `hrEnd` INTEGER, `hrAfter60s` INTEGER, `hrr60` INTEGER, `restAfterMs` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`sessionId`) REFERENCES `session`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`problemId`) REFERENCES `problem`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
         connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_attempt_sessionId_ordinal` ON `attempt` (`sessionId`, `ordinal`)")
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_attempt_problemId` ON `attempt` (`problemId`)")
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_attempt_startedAt` ON `attempt` (`startedAt`)")
@@ -103,9 +103,9 @@ public class BouldClockDatabase_Impl : BouldClockDatabase() {
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_session_summary_type` ON `session_summary` (`type`)")
         connection.execSQL("CREATE TABLE IF NOT EXISTS `sensor_chunk` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `sensor` TEXT NOT NULL, `relativePath` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER NOT NULL, `sampleRateHz` INTEGER NOT NULL, `sampleCount` INTEGER NOT NULL, `sizeBytes` INTEGER NOT NULL, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`))")
         connection.execSQL("CREATE INDEX IF NOT EXISTS `index_sensor_chunk_sessionId` ON `sensor_chunk` (`sessionId`)")
-        connection.execSQL("CREATE TABLE IF NOT EXISTS `user_profile` (`id` TEXT NOT NULL, `weightKg` INTEGER NOT NULL, `birthYear` INTEGER NOT NULL, `sex` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`))")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `user_profile` (`id` TEXT NOT NULL, `weightKg` INTEGER NOT NULL, `birthYear` INTEGER NOT NULL, `sex` TEXT NOT NULL, `heightCm` INTEGER, `restingHrBpm` INTEGER, `maxHrBpm` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)")
-        connection.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4a665b20eeac703b75eae5b3bbabe875')")
+        connection.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e6e61542e5573bd1091a28d5934c0b7f')")
       }
 
       public override fun dropAllTables(connection: SQLiteConnection) {
@@ -223,6 +223,7 @@ public class BouldClockDatabase_Impl : BouldClockDatabase() {
         _columnsAttempt.put("sessionId", TableInfo.Column("sessionId", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsAttempt.put("problemId", TableInfo.Column("problemId", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsAttempt.put("ordinal", TableInfo.Column("ordinal", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsAttempt.put("kind", TableInfo.Column("kind", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsAttempt.put("startsNewBoulder", TableInfo.Column("startsNewBoulder", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsAttempt.put("startedAt", TableInfo.Column("startedAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsAttempt.put("endedAt", TableInfo.Column("endedAt", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY))
@@ -367,6 +368,9 @@ public class BouldClockDatabase_Impl : BouldClockDatabase() {
         _columnsUserProfile.put("weightKg", TableInfo.Column("weightKg", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsUserProfile.put("birthYear", TableInfo.Column("birthYear", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsUserProfile.put("sex", TableInfo.Column("sex", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsUserProfile.put("heightCm", TableInfo.Column("heightCm", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsUserProfile.put("restingHrBpm", TableInfo.Column("restingHrBpm", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsUserProfile.put("maxHrBpm", TableInfo.Column("maxHrBpm", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsUserProfile.put("createdAt", TableInfo.Column("createdAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsUserProfile.put("updatedAt", TableInfo.Column("updatedAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY))
         _columnsUserProfile.put("deletedAt", TableInfo.Column("deletedAt", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY))

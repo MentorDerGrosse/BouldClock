@@ -14,6 +14,12 @@ import at.mentor.bouldclockapp.core.model.GradeSystem
  * Die Schritte in Klammern haengen von der Sessionart ab: der Wettkampf hat
  * keinen, das Board beide, alles andere nur den Grad.
  *
+ * **Zuege probieren** hat bewusst keinen eigenen Zustand: es wird wie ein
+ * Versuch protokolliert und am Handy mit einem Tipp zur Zugprobe erklaert. Ein
+ * eigener Knopf auf der Uhr hat den Pausenbildschirm gesprengt, und eine
+ * Erkennung ueber den Beschleunigungssensor liess sich nicht sauber trennen -
+ * gemessen an einer echten Session ueberlappen Klettern und Pause zu stark.
+ *
  * Entscheidend: aus [Resting] fuehrt **kein** automatischer Uebergang heraus.
  * Der Pausen-Timer ist ein Signal, kein Zustandswechsel. Laeuft er ab, vibriert
  * die Uhr und der Zaehler laeuft in die Ueberzeit weiter - sitzen bleiben,

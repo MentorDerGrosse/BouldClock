@@ -19,7 +19,11 @@ import at.mentor.bouldclockapp.data.sync.SessionSyncSender
 import at.mentor.bouldclockapp.data.db.entity.UserProfileEntity
 import at.mentor.bouldclockapp.data.session.FinishedSession
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
+import at.mentor.bouldclockapp.core.metrics.RestingHeartRate
+import at.mentor.bouldclockapp.data.health.HeartRateMeasurer
 import at.mentor.bouldclockapp.data.health.HeartRateState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import at.mentor.bouldclockapp.data.session.LiveMetrics
 import at.mentor.bouldclockapp.data.session.SessionController
 import at.mentor.bouldclockapp.data.session.SessionRecordingService
@@ -82,12 +86,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         hrSampleDao = db.hrSampleDao(),
         metricSampleDao = db.metricSampleDao(),
         summaryDao = db.sessionSummaryDao(),
+        userProfileDao = db.userProfileDao(),
         pressureTraceSource = SensorFilePressureSource(application, db.sensorChunkDao()),
         // Bei jeder Gradabfrage frisch gelesen - eine Umstellung greift sofort.
         preferredGradeSystem = { settings.gradeSystem.first() },
     )
 
     private val profileDao = db.userProfileDao()
+    private val measurer = HeartRateMeasurer(application)
 
     val profileState: StateFlow<ProfileState> = profileDao.observe()
         .map { profile -> profile?.let(ProfileState::Present) ?: ProfileState.Missing }
@@ -153,7 +159,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
             // Hoehen nachtragen, die frueher wegen der falschen Reihenfolge
             // nie gerechnet wurden. Die Luftdruckdateien liegen noch da.
-            controller.backfillClimbHeights().forEach { syncSender.sendSession(it) }
+            controller.backfillAnalysis().forEach { syncSender.sendSession(it) }
 
             // Beim Start nachholen, was beim letzten Mal nicht durchging - etwa
             // weil das Handy in der Halle nicht in Reichweite war.
@@ -165,18 +171,83 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             syncSender.sendProfile()
         }
 
-        viewModelScope.launch {
-            controller.phase.collectLatest { phase ->
-                val pending = phase.pendingHrr60() ?: return@collectLatest
-                // Frist ab dem Absteigen, nicht ab dem Phasenwechsel: die
-                // Gradabfrage liegt dazwischen und darf das Fenster nicht schieben.
-                val wait = pending.endedAt + SessionMetrics.HRR_WINDOW_MS +
-                    HRR_SETTLE_SLACK_MS - System.currentTimeMillis()
-                if (wait > 0) delay(wait)
-                controller.settleHrr60(pending.attemptId)
+    }
+
+    // --- Ruhepuls ---
+
+    /**
+     * Einmal beim ersten Start nachfragen, dann nie wieder von selbst.
+     *
+     * Der Ruhepuls geht doppelt in die Kalorien ein und ist monatelang gueltig -
+     * es lohnt also zu fragen, aber nur einmal. Wer ueberspringt, bekommt eine
+     * Schaetzung statt einer Messung, sonst nichts.
+     */
+    val needsRestingHr: StateFlow<Boolean> = combine(
+        profileDao.observe(),
+        settings.restingHrAsked,
+    ) { profile, asked ->
+        profile != null && profile.restingHrBpm == null && !asked
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun skipRestingHr() {
+        viewModelScope.launch { settings.markRestingHrAsked() }
+    }
+
+    private val _restingHr = MutableStateFlow<RestingHrState>(RestingHrState.Idle)
+    val restingHr: StateFlow<RestingHrState> = _restingHr
+
+    private var measuring: Job? = null
+
+    /**
+     * Misst den Ruhepuls und legt ihn ins Profil.
+     *
+     * Zwei Minuten, dann der Median der niedrigsten Werte - siehe
+     * [RestingHeartRate]. Waehrenddessen laeuft der optische Sensor durchgehend,
+     * deshalb nur auf ausdrueckliche Anforderung und nicht nebenher.
+     */
+    fun measureRestingHr() {
+        if (measuring?.isActive == true) return
+        val started = System.currentTimeMillis()
+        val samples = mutableListOf<Int>()
+
+        measuring = viewModelScope.launch {
+            _restingHr.value = RestingHrState.Measuring(null, HeartRateState.STARTING, RestingHeartRate.MEASURE_SECONDS, 0)
+
+            withTimeoutOrNull(RestingHeartRate.MEASURE_SECONDS * 1000L) {
+                measurer.measure().collect { measurement ->
+                    measurement.bpm?.let(samples::add)
+                    val elapsed = ((System.currentTimeMillis() - started) / 1000L).toInt()
+                    _restingHr.value = RestingHrState.Measuring(
+                        bpm = measurement.bpm,
+                        sensor = measurement.state,
+                        remainingSeconds = (RestingHeartRate.MEASURE_SECONDS - elapsed).coerceAtLeast(0),
+                        samples = samples.size,
+                    )
+                }
             }
+
+            val resting = RestingHeartRate.fromSamples(samples)
+            if (resting != null) saveRestingHr(resting)
+            // Auch ein Fehlschlag zaehlt als gefragt - sonst kommt die Frage
+            // bei jedem Start wieder.
+            settings.markRestingHrAsked()
+            _restingHr.value = RestingHrState.Done(resting)
         }
     }
+
+    fun dismissRestingHr() {
+        measuring?.cancel()
+        measuring = null
+        _restingHr.value = RestingHrState.Idle
+    }
+
+    private suspend fun saveRestingHr(bpm: Int) {
+        val profile = profileDao.get() ?: return
+        val timestamp = System.currentTimeMillis()
+        profileDao.upsert(profile.copy(restingHrBpm = bpm, meta = profile.meta.touched(timestamp)))
+        syncSender.sendProfile()
+    }
+
 
     /**
      * Legt das Profil an.
@@ -287,18 +358,25 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     private companion object {
         /** Kleiner Nachlauf, damit das Sample bei +60 s sicher geschrieben ist. */
-        const val HRR_SETTLE_SLACK_MS = 2_000L
 
         /** So viele Sessions zeigt die Uhr - alles Weitere gehoert aufs Handy. */
         const val RECENT_SESSIONS = 10
     }
 }
 
-/** Versuch, dessen HRR60 noch aussteht. */
-private data class PendingHrr(val attemptId: String, val endedAt: Long)
 
-private fun SessionPhase.pendingHrr60(): PendingHrr? = when (this) {
-    is SessionPhase.Grading -> PendingHrr(attemptId, endedAt)
-    is SessionPhase.Resting -> PendingHrr(lastAttemptId, since)
-    else -> null
+
+/** Stand der Ruhepulsmessung. */
+sealed interface RestingHrState {
+    data object Idle : RestingHrState
+
+    data class Measuring(
+        val bpm: Int?,
+        val sensor: HeartRateState,
+        val remainingSeconds: Int,
+        val samples: Int,
+    ) : RestingHrState
+
+    /** [bpm] ist null, wenn zu wenige Werte zusammenkamen. */
+    data class Done(val bpm: Int?) : RestingHrState
 }

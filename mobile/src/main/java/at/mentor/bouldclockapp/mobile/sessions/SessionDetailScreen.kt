@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.BoardAngles
 import at.mentor.bouldclockapp.core.model.GradeSystem
@@ -41,10 +42,18 @@ import at.mentor.bouldclockapp.data.db.entity.ProblemEntity
 import at.mentor.bouldclockapp.data.db.entity.SessionSummaryEntity
 import at.mentor.bouldclockapp.mobile.BoulderRun
 import at.mentor.bouldclockapp.mobile.SessionDetail
+import at.mentor.bouldclockapp.mobile.formatBpm
+import at.mentor.bouldclockapp.mobile.formatBpmRange
 import at.mentor.bouldclockapp.mobile.formatDuration
+import at.mentor.bouldclockapp.mobile.formatDurationWithUnit
+import at.mentor.bouldclockapp.mobile.formatRecovery
+import at.mentor.bouldclockapp.mobile.ui.TrendLine
 import at.mentor.bouldclockapp.mobile.formatKcal
 import at.mentor.bouldclockapp.mobile.formatMeters
+import at.mentor.bouldclockapp.core.metrics.HeartRateZone
+import at.mentor.bouldclockapp.mobile.LocalChartColors
 import at.mentor.bouldclockapp.mobile.ui.BouldCard
+import at.mentor.bouldclockapp.mobile.ui.StackedShareBar
 import at.mentor.bouldclockapp.mobile.ui.EmptyState
 import at.mentor.bouldclockapp.mobile.ui.SectionHeader
 import at.mentor.bouldclockapp.mobile.ui.StatRow
@@ -60,6 +69,7 @@ data class SessionDetailActions(
     val onGradeChange: (attemptId: String, gradeValue: Int?) -> Unit,
     val onAngleChange: (attemptId: String, degrees: Int?) -> Unit,
     val onTopMoveChange: (attemptId: String, move: Int?) -> Unit,
+    val onKindChange: (attemptId: String, kind: AttemptKind) -> Unit,
     val onDeleteAttempt: (attemptId: String) -> Unit,
     val onAssignProblem: (attemptIds: List<String>, problemId: String?) -> Unit,
     val onCreateProblem: (attemptIds: List<String>, label: String, gradeValue: Int?) -> Unit,
@@ -80,6 +90,8 @@ fun SessionDetailScreen(
     detail: SessionDetail?,
     gyms: List<GymEntity>,
     problems: List<ProblemEntity>,
+    /** Zonengrenzen in Schlaegen, aus dem Profil. */
+    zoneBounds: List<Int>,
     actions: SessionDetailActions,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
@@ -94,13 +106,46 @@ fun SessionDetailScreen(
     }
 
     val visibleAttempts = detail.attempts.filter { it.meta.deletedAt == null }
+    // Anzeigenummer nur ueber echte Versuche - die Zugproben dazwischen
+    // sollen die Zaehlung nicht loechrig machen.
+    val attemptNumbers = visibleAttempts
+        .filter { it.kind.isAttempt }
+        .withIndex()
+        .associate { (index, attempt) -> attempt.id to index + 1 }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { StatsCard(detail.summary, visibleAttempts.size) }
+        item { StatsCard(detail.summary, attemptNumbers.size, visibleAttempts) }
+
+        if (detail.heartBeats.size >= 2) {
+            item { SectionHeader("Pulsverlauf", trailing = pulseRange(detail)) }
+            item {
+                BouldCard {
+                    // Ausgeduennt: dreitausend Punkte auf ein paar hundert Pixel
+                    // zu zeichnen kostet nur Rechenzeit und sieht gleich aus.
+                    val step = (detail.heartBeats.size / 240).coerceAtLeast(1)
+                    TrendLine(
+                        values = detail.heartBeats.filterIndexed { i, _ -> i % step == 0 }
+                            .map { it.bpm.toDouble() },
+                    )
+                    Text(
+                        text = "Über ${formatDurationWithUnit(detail.session.let { s ->
+                            (s.endedAt ?: s.startedAt) - s.startedAt
+                        })}, ${detail.heartBeats.size} Messwerte",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // Dieselben Zonen wie in der Historie, aber nur fuer diesen Abend -
+            // das ist der Filter "nach Session".
+            item { SectionHeader("Zeit in Pulszonen") }
+            item { SessionZoneCard(detail, zoneBounds) }
+        }
 
         item { SectionHeader("Halle") }
         item { GymCard(detail.gym, gyms, actions.onGymChange) }
@@ -140,8 +185,15 @@ fun SessionDetailScreen(
                 )
             }
         } else {
-            visibleAttempts.forEach { attempt ->
-                item(key = attempt.id) { AttemptCard(attempt, actions) }
+            visibleAttempts.forEachIndexed { index, attempt ->
+                item(key = attempt.id) {
+                    AttemptCard(attempt, attemptNumbers[attempt.id], detail.startBpm[attempt.id], actions)
+                }
+                // Die Pause bis zum naechsten Block, zwischen den Karten.
+                val rest = attempt.restAfterMs
+                if (rest != null && index < visibleAttempts.lastIndex) {
+                    item(key = "rest-${attempt.id}") { RestRow(rest) }
+                }
             }
         }
 
@@ -149,19 +201,97 @@ fun SessionDetailScreen(
     }
 }
 
+/** Zonenverteilung dieses einen Abends. */
 @Composable
-private fun StatsCard(summary: SessionSummaryEntity?, attemptCount: Int) {
+private fun SessionZoneCard(detail: SessionDetail, bounds: List<Int>) {
+    if (bounds.size < HeartRateZone.entries.size - 1) return
+    val ramp = LocalChartColors.current.zoneRamp
+
+    val seconds = HeartRateZone.entries.associateWith { 0L }.toMutableMap()
+    detail.heartBeats.zipWithNext().forEach { (a, b) ->
+        val span = (b.timestampMs - a.timestampMs).coerceIn(0L, 5_000L)
+        val index = bounds.count { b.bpm >= it }
+        val zone = HeartRateZone.entries[index]
+        seconds[zone] = (seconds[zone] ?: 0L) + span
+    }
+    if (seconds.values.sum() <= 0L) return
+
+    BouldCard {
+        StackedShareBar(
+            parts = HeartRateZone.entries.mapIndexed { index, zone ->
+                Triple(zoneLabel(zone, index, bounds), seconds.getValue(zone), ramp[index])
+            },
+            valueFormat = { formatDurationWithUnit(it) },
+        )
+    }
+}
+
+private fun zoneLabel(zone: HeartRateZone, index: Int, bounds: List<Int>): String {
+    val from = if (index == 0) null else bounds[index - 1]
+    val to = bounds.getOrNull(index)
+    return when {
+        from == null && to != null -> "${zone.displayName} (unter $to)"
+        from != null && to != null -> "${zone.displayName} ($from–${to - 1})"
+        from != null -> "${zone.displayName} (ab $from)"
+        else -> zone.displayName
+    }
+}
+
+/** Die Pause zwischen zwei Versuchen - schmal, damit sie die Liste nicht dominiert. */
+@Composable
+private fun RestRow(restMs: Long) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp, horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "↓",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = "Pause ${formatDurationWithUnit(restMs)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun pulseRange(detail: SessionDetail): String {
+    val bpm = detail.heartBeats.map { it.bpm }
+    return formatBpmRange(bpm.min(), bpm.max())
+}
+
+@Composable
+private fun StatsCard(
+    summary: SessionSummaryEntity?,
+    attemptCount: Int,
+    attempts: List<AttemptEntity>,
+) {
+    // Stuerze sind protokollierte Fehlversuche - nicht aus dem
+    // Beschleunigungssensor erkannt, das kommt spaeter.
+    val falls = attempts.filter { it.kind.isAttempt && it.outcome == AttemptOutcome.FAIL }
+    val deepestFall = falls.mapNotNull { it.climbHeightMeters }.maxOrNull()
+
     BouldCard {
         StatRow("Versuche", attemptLabel(attemptCount))
+        if (falls.isNotEmpty()) {
+            StatRow("Stürze", falls.size.toString())
+            // Bei einem Sturz faellt man vom hoechsten Punkt - die gemessene
+            // Kletterhoehe *ist* die Fallhoehe, sie heisst nur anders.
+            deepestFall?.let { StatRow("Tiefster Sturz", formatMeters(it)) }
+        }
         summary?.let {
             StatRow("Tops", "${it.sendCount} · ${it.flashCount} Flash")
-            StatRow("Dauer", formatDuration(it.totalMs))
-            StatRow("Wandzeit", formatDuration(it.workMs))
+            StatRow("Dauer", formatDurationWithUnit(it.totalMs))
+            StatRow("Wandzeit", formatDurationWithUnit(it.workMs))
+            StatRow("Pause", formatDurationWithUnit(it.restMs))
             it.sendRate?.let { rate -> StatRow("Erfolgsquote", "${(rate * 100).roundToInt()} %") }
             it.hrAvg?.let { avg ->
-                StatRow("Puls", it.hrMax?.let { max -> "$avg / $max" } ?: "$avg")
+                StatRow("Puls", it.hrMax?.let { max -> "$avg / $max bpm" } ?: formatBpm(avg))
             }
-            it.hrr60Avg?.let { hrr -> StatRow("Erholung 60 s", "−$hrr") }
+            it.hrr60Avg?.let { hrr -> StatRow("Erholung nach 60 s", formatRecovery(hrr)) }
             it.caloriesTotal?.let { kcal ->
                 StatRow(
                     label = "Kalorien",
@@ -387,8 +517,14 @@ private fun ProblemPickerDialog(
 /** Ein Versuch, aufklappbar zum Bearbeiten. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttemptCard(attempt: AttemptEntity, actions: SessionDetailActions) {
+private fun AttemptCard(
+    attempt: AttemptEntity,
+    number: Int?,
+    startBpm: Int?,
+    actions: SessionDetailActions,
+) {
     var expanded by remember { mutableStateOf(false) }
+    val isMoveTest = !attempt.kind.isAttempt
 
     BouldCard(modifier = Modifier.clickable { expanded = !expanded }) {
         Row(
@@ -396,7 +532,15 @@ private fun AttemptCard(attempt: AttemptEntity, actions: SessionDetailActions) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("#${attempt.ordinal}", style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = number?.let { "#$it" } ?: AttemptKind.MOVE_TEST.displayName,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (isMoveTest) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
             Text(
                 text = summarize(attempt),
                 style = MaterialTheme.typography.bodySmall,
@@ -407,6 +551,41 @@ private fun AttemptCard(attempt: AttemptEntity, actions: SessionDetailActions) {
         if (!expanded) return@BouldCard
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        // Nachtraeglich umwidmen: der Knopf auf der Uhr laesst sich vergessen,
+        // und dann soll man es hier in einem Tipp richtigstellen koennen.
+        Text("Art", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AttemptKind.entries.forEach { kind ->
+                FilterChip(
+                    selected = attempt.kind == kind,
+                    onClick = { actions.onKindChange(attempt.id, kind) },
+                    label = { Text(kind.displayName) },
+                )
+            }
+        }
+
+        if (isMoveTest) {
+            Text(
+                text = "Zählt für Kalorien, nicht für Versuche, Quote oder Grad – " +
+                    "und unterbricht die Erholungsmessung davor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { actions.onDeleteAttempt(attempt.id) }) {
+                Text("Löschen", color = MaterialTheme.colorScheme.error)
+            }
+            return@BouldCard
+        }
+
+        // Der Puls dieses Versuchs: womit du gestartet bist, was im Schnitt lief,
+        // wo die Spitze war. Der Startpuls sagt, ob du erholt warst.
+        startBpm?.let { StatRow("Puls beim Start", formatBpm(it)) }
+        attempt.hrAvg?.let { avg ->
+            StatRow("Puls", attempt.hrMax?.let { max -> "$avg / $max bpm" } ?: formatBpm(avg))
+        }
+        attempt.hrr60?.let { drop -> StatRow("Erholung nach 60 s", formatRecovery(drop)) }
+        attempt.restAfterMs?.let { rest -> StatRow("Pause danach", formatDurationWithUnit(rest)) }
 
         Text("Ergebnis", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -538,11 +717,15 @@ private fun DeleteSessionCard(onDelete: () -> Unit) {
 }
 
 private fun summarize(attempt: AttemptEntity): String = listOfNotNull(
+    attempt.takeIf { !it.kind.isAttempt }?.let { "Züge probiert" },
     attempt.gradeValue?.let { Grades.label(it, GradeSystem.FONT) },
     attempt.boardAngleDegrees?.let { BoardAngles.format(it) },
     attempt.outcome?.displayName,
     attempt.topMoveReached?.let { "bis Zug $it" },
-    attempt.climbHeightMeters?.let { formatMeters(it) },
+    attempt.climbHeightMeters?.let {
+        // Wer gestuerzt ist, ist von genau dieser Hoehe gefallen.
+        if (attempt.outcome == AttemptOutcome.FAIL) "${formatMeters(it)} gefallen" else formatMeters(it)
+    },
 ).joinToString(" · ").ifEmpty { "ohne Angabe" }
 
 private const val ANGLE_STEP = 5

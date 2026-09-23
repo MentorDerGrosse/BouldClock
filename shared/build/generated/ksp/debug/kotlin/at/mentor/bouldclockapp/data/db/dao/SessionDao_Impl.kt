@@ -569,6 +569,30 @@ public class SessionDao_Impl(
     }
   }
 
+  public override suspend fun finishedIds(): List<String> {
+    val _sql: String = """
+        |
+        |        SELECT id FROM session
+        |        WHERE state = 'FINISHED' AND deletedAt IS NULL
+        |        ORDER BY startedAt DESC
+        |        
+        """.trimMargin()
+    return performSuspending(__db, true, false) { _connection ->
+      val _stmt: SQLiteStatement = _connection.prepare(_sql)
+      try {
+        val _result: MutableList<String> = mutableListOf()
+        while (_stmt.step()) {
+          val _item: String
+          _item = _stmt.getText(0)
+          _result.add(_item)
+        }
+        _result
+      } finally {
+        _stmt.close()
+      }
+    }
+  }
+
   public override suspend fun previousComparable(
     type: SessionType,
     gymId: String?,

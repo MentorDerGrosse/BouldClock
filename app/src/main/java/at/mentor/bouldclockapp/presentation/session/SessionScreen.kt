@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -116,6 +117,7 @@ fun SessionScreen(
             onFinishSession = onFinishSession,
             modifier = modifier,
         )
+
     }
 }
 
@@ -142,7 +144,7 @@ private fun GradingContent(
         onConfirm = onConfirm,
         onFinishSession = onFinishSession,
         modifier = modifier,
-        extraButton = if (phase.boulderAmbiguous) {
+        extraButtons = if (phase.boulderAmbiguous) {
             {
                 CompactButton(
                     onClick = onNewBoulder,
@@ -175,7 +177,7 @@ private fun PickerScreen(
     onConfirm: () -> Unit,
     onFinishSession: () -> Unit,
     modifier: Modifier = Modifier,
-    extraButton: (@Composable () -> Unit)? = null,
+    extraButtons: (@Composable RowScope.() -> Unit)? = null,
     picker: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -193,7 +195,7 @@ private fun PickerScreen(
                 onLongClickLabel = SESSION_END_LABEL,
                 label = { Text("Weiter", style = MaterialTheme.typography.labelMedium, maxLines = 1) },
             )
-            extraButton?.invoke()
+            extraButtons?.invoke(this)
         }
     }
 }

@@ -4,6 +4,14 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import at.mentor.bouldclockapp.core.metrics.AttemptFact
+import at.mentor.bouldclockapp.core.metrics.BodyProfile
+import at.mentor.bouldclockapp.core.metrics.Energy
+import at.mentor.bouldclockapp.core.metrics.HeartRateZone
+import at.mentor.bouldclockapp.core.metrics.Readiness
+import at.mentor.bouldclockapp.core.metrics.ReadinessLevel
+import at.mentor.bouldclockapp.core.metrics.SessionMetrics
+import at.mentor.bouldclockapp.core.metrics.lowerBpm
+import at.mentor.bouldclockapp.core.metrics.readiness
 import at.mentor.bouldclockapp.core.metrics.AttemptRun
 import at.mentor.bouldclockapp.core.metrics.HeightTotals
 import at.mentor.bouldclockapp.core.metrics.Period
@@ -14,6 +22,7 @@ import at.mentor.bouldclockapp.core.metrics.fillGaps
 import at.mentor.bouldclockapp.core.metrics.groupRuns
 import at.mentor.bouldclockapp.core.metrics.heightTotals
 import at.mentor.bouldclockapp.core.metrics.startOfPeriod
+import at.mentor.bouldclockapp.core.model.AttemptKind
 import at.mentor.bouldclockapp.core.model.AttemptOutcome
 import at.mentor.bouldclockapp.core.model.BiologicalSex
 import at.mentor.bouldclockapp.core.model.LandmarkComparison
@@ -21,6 +30,9 @@ import at.mentor.bouldclockapp.core.model.Landmarks
 import at.mentor.bouldclockapp.core.model.ProfileRanges
 import at.mentor.bouldclockapp.data.db.BouldClockDatabase
 import at.mentor.bouldclockapp.data.db.dao.GradeBucket
+import at.mentor.bouldclockapp.data.db.dao.HrSessionRange
+import at.mentor.bouldclockapp.data.db.dao.HrZoneSeconds
+import at.mentor.bouldclockapp.data.db.entity.HrSampleEntity
 import at.mentor.bouldclockapp.data.db.dao.Hrr60Point
 import at.mentor.bouldclockapp.data.db.dao.ProblemTally
 import at.mentor.bouldclockapp.data.db.entity.AttemptEntity
@@ -52,15 +64,40 @@ data class SessionDetail(
     val summary: SessionSummaryEntity?,
     val attempts: List<AttemptEntity>,
     val gym: GymEntity?,
+
+    /** Sekuendlicher Puls der Session - fuer Verlauf und Startpuls je Versuch. */
+    val heartBeats: List<HrSampleEntity> = emptyList(),
 ) {
+
+    /**
+     * Puls beim Losklettern, je Versuch.
+     *
+     * Das ehrlichere Ermuedungssignal als HRR60: wer den achten Boulder mit 132
+     * beginnt und den ersten mit 99 hatte, ist nicht erholt - und dafuer braucht
+     * es keine Fensterregeln.
+     */
+    val startBpm: Map<String, Int> get() = attempts.associate { attempt ->
+        attempt.id to (
+            heartBeats
+                .minByOrNull { kotlin.math.abs(it.timestampMs - attempt.startedAt) }
+                ?.takeIf { kotlin.math.abs(it.timestampMs - attempt.startedAt) <= 5_000L }
+                ?.bpm ?: 0
+            )
+    }.filterValues { it > 0 }
     /**
      * Die Versuche zu Bouldern gruppiert.
      *
      * Dieselbe Regel wie in der Zusammenfassung auf der Uhr: getrennt wird an
      * der beim Protokollieren gesetzten Grenze, nicht an gleichen Graden.
      */
+    /** Nur echte Versuche - eine Zugprobe gehoert zum laufenden Boulder, zaehlt aber nicht. */
+    val realAttempts: List<AttemptEntity>
+        get() = attempts.filter { it.meta.deletedAt == null && it.kind.isAttempt }
+
     val boulders: List<BoulderRun> get() {
-        val visible = attempts.filter { it.meta.deletedAt == null && it.endedAt != null }
+        val visible = attempts.filter {
+            it.meta.deletedAt == null && it.endedAt != null && it.kind.isAttempt
+        }
         val runs = groupRuns(visible.map { it.toFact() })
         var index = 0
         return runs.map { run ->
@@ -90,6 +127,16 @@ data class DashboardState(
     val thisWeek: PeriodBucket? = null,
     val lastWeek: PeriodBucket? = null,
     val sessionCount: Int = 0,
+
+    /** Ueber alle Sessions - die Zahl, die man zum Spass ganz vorne sehen will. */
+    val flashRate: Double? = null,
+    val sendRate: Double? = null,
+
+    /** Sessions je Woche, ueber die Wochen mit Aktivitaet. */
+    val sessionsPerWeek: Double? = null,
+
+    /** Puls der letzten acht Wochen, fuer den Verlauf auf der Uebersicht. */
+    val recentPulse: List<PeriodBucket> = emptyList(),
 )
 
 /** Eine Kalenderwoche in der Sessionliste. */
@@ -118,6 +165,18 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     private val sender = SessionSyncSender(application, repository)
     private val zone: ZoneId = ZoneId.systemDefault()
 
+    init {
+        // Beim Start alles neu durchrechnen.
+        //
+        // Dieselbe Rechnung wie auf der Uhr, nur von dieser Seite angestossen -
+        // damit die Kalorien nach einer Aenderung am Modell auch dann stimmen,
+        // wenn die Uhr gerade nicht in Reichweite ist. Idempotent: gleiche
+        // Rohwerte, gleiches Ergebnis.
+        viewModelScope.launch {
+            db.sessionDao().finishedIds().forEach { repository.refreshSummary(it) }
+        }
+    }
+
     // --- Bestaende ---
 
     val summaries: StateFlow<List<SessionSummaryEntity>> =
@@ -144,6 +203,35 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     val profile: StateFlow<UserProfileEntity?> = db.userProfileDao().observe()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Puls je Session - Minimum, Schnitt, Maximum. */
+    val hrRanges: StateFlow<Map<String, HrSessionRange>> =
+        db.hrSampleDao().observeSessionRanges(SessionMetrics.MIN_HR_ACCURACY)
+            .map { list -> list.associateBy { it.sessionId } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /**
+     * Sekunden je Pulszone, je Session.
+     *
+     * Die Zonengrenzen haengen am Profil, deshalb wird die Abfrage neu
+     * aufgesetzt, sobald sich Ruhe- oder Maximalpuls aendern.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val zoneSeconds: StateFlow<Map<String, HrZoneSeconds>> = profile
+        .flatMapLatest { current ->
+            val bounds = zoneBounds(current)
+            db.hrSampleDao().observeZoneSeconds(
+                SessionMetrics.MIN_HR_ACCURACY,
+                bounds[0], bounds[1], bounds[2], bounds[3], bounds[4],
+            )
+        }
+        .map { list -> list.associateBy { it.sessionId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Die Zonengrenzen in Schlaegen - fuers Beschriften. */
+    val zoneBounds: StateFlow<List<Int>> = profile
+        .map { zoneBounds(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, zoneBounds(null))
+
     // --- Abgeleitetes ---
 
     val dashboard: StateFlow<DashboardState> = summaries
@@ -164,6 +252,27 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /**
+     * Ist heute ein guter Tag zum Bouldern?
+     *
+     * Aus Abstand zur letzten Session, Wochenvolumen und letztem RPE - mit
+     * ausgeschriebener Begruendung statt einer Punktzahl.
+     */
+    val readiness: StateFlow<Readiness> = summaries
+        .map { list ->
+            readiness(
+                facts = list.map { it.toFact() },
+                lastRpe = list.maxByOrNull { it.startedAt }?.rpe,
+                today = LocalDate.now(zone),
+                zone = zone,
+            )
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            Readiness(ReadinessLevel.UNKNOWN, emptyList()),
+        )
+
     private val historyPeriod = MutableStateFlow(Period.WEEK)
     val period: StateFlow<Period> = historyPeriod
 
@@ -173,8 +282,73 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
             fillGaps(buckets, selected, count = slotsFor(selected), until = LocalDate.now(zone))
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /**
+     * Zeit je Pulszone ueber den gewaehlten Zeitraum.
+     *
+     * Eine Verteilung, kein Verlauf: die Frage ist "wie viel vom Abend war
+     * wirklich hart", nicht "wann".
+     */
+    val periodZones: StateFlow<Map<HeartRateZone, Int>> =
+        combine(historyBuckets, zoneSeconds, summaries) { buckets, zones, list ->
+            if (buckets.isEmpty()) return@combine emptyMap()
+            val from = buckets.first().start.atStartOfDay(zone).toInstant().toEpochMilli()
+            val ids = list.filter { it.startedAt >= from }.map { it.sessionId }.toSet()
+
+            val relevant = zones.filterKeys { it in ids }.values
+            if (relevant.isEmpty()) return@combine emptyMap()
+
+            mapOf(
+                HeartRateZone.REST to relevant.sumOf { it.restSeconds },
+                HeartRateZone.RECOVERY to relevant.sumOf { it.recoverySeconds },
+                HeartRateZone.BASE to relevant.sumOf { it.baseSeconds },
+                HeartRateZone.TEMPO to relevant.sumOf { it.tempoSeconds },
+                HeartRateZone.THRESHOLD to relevant.sumOf { it.thresholdSeconds },
+                HeartRateZone.MAXIMAL to relevant.sumOf { it.maximalSeconds },
+            ).filterValues { it > 0 }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Kennzahlen ueber den gewaehlten Zeitraum, fuer Kacheln statt Kurven. */
+    val periodTotals: StateFlow<PeriodBucket?> = historyBuckets
+        .map { buckets ->
+            buckets.filter { it.sessionCount > 0 }.takeIf { it.isNotEmpty() }?.let { active ->
+                PeriodBucket(
+                    period = active.first().period,
+                    start = active.first().start,
+                    sessionCount = active.sumOf { it.sessionCount },
+                    attemptCount = active.sumOf { it.attemptCount },
+                    sendCount = active.sumOf { it.sendCount },
+                    flashCount = active.sumOf { it.flashCount },
+                    climbHeightMeters = active.sumOf { it.climbHeightMeters },
+                    caloriesTotal = active.sumOf { it.caloriesTotal },
+                    workMs = active.sumOf { it.workMs },
+                    totalMs = active.sumOf { it.totalMs },
+                    hardestSendValue = active.mapNotNull { it.hardestSendValue }.maxOrNull(),
+                    hrAvg = active.mapNotNull { it.hrAvg }.average().takeIf { !it.isNaN() }?.toInt(),
+                    hrMax = active.mapNotNull { it.hrMax }.maxOrNull(),
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     fun selectPeriod(value: Period) {
         historyPeriod.value = value
+    }
+
+    /**
+     * Die Sessions hinter einem Punkt im Diagramm.
+     *
+     * Damit wird aus einer Saeule etwas Anklickbares: welcher Abend steckt
+     * eigentlich in dieser Woche?
+     */
+    fun sessionsIn(bucket: PeriodBucket): List<SessionSummaryEntity> {
+        val from = bucket.start.atStartOfDay(zone).toInstant().toEpochMilli()
+        val until = if (bucket.period.isSingleBucket) {
+            Long.MAX_VALUE
+        } else {
+            bucket.endExclusive.atStartOfDay(zone).toInstant().toEpochMilli()
+        }
+        return summaries.value.filter { it.startedAt in from until until }
+            .sortedByDescending { it.startedAt }
     }
 
     private val openSessionId = MutableStateFlow<String?>(null)
@@ -190,13 +364,15 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
                     db.sessionSummaryDao().observeBySession(id),
                     db.attemptDao().observeBySession(id),
                     db.gymDao().observeAll(),
-                ) { session, summary, attempts, allGyms ->
+                    db.hrSampleDao().observeBySession(id, SessionMetrics.MIN_HR_ACCURACY),
+                ) { session, summary, attempts, allGyms, beats ->
                     session?.let {
                         SessionDetail(
                             session = it,
                             summary = summary,
                             attempts = attempts,
                             gym = allGyms.firstOrNull { gym -> gym.id == it.gymId },
+                            heartBeats = beats,
                         )
                     }
                 }
@@ -256,6 +432,17 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
     /** Bis zu welchem Zug gekommen - fuettert den Projektverlauf. */
     fun setAttemptTopMove(sessionId: String, attemptId: String, move: Int?) =
         editAttempt(sessionId, attemptId) { it.copy(topMoveReached = move?.takeIf { m -> m > 0 }) }
+
+    /**
+     * Macht aus einem Versuch eine Zugprobe und zurueck.
+     *
+     * Der Ausweg, wenn der Knopf auf der Uhr vergessen wurde - und damit muss
+     * man ihn dort nicht treffen. Eine Zugprobe faellt aus Versuchszahl,
+     * Erfolgsquote und Gradpyramide heraus, zaehlt aber weiter fuer die
+     * Kalorien, und die Erholung des Versuchs davor wird neu bestimmt.
+     */
+    fun setAttemptKind(sessionId: String, attemptId: String, kind: AttemptKind) =
+        editAttempt(sessionId, attemptId) { it.copy(kind = kind) }
 
     /** Weich geloescht: ein hart entfernter Versuch kaeme bei der Uhr nie an. */
     fun deleteAttempt(sessionId: String, attemptId: String) = edit(sessionId) {
@@ -336,7 +523,13 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- Profil ---
 
-    fun saveProfile(weightKg: Int, ageYears: Int, sex: BiologicalSex) {
+    fun saveProfile(
+        weightKg: Int,
+        ageYears: Int,
+        sex: BiologicalSex,
+        heightCm: Int?,
+        restingHrBpm: Int?,
+    ) {
         viewModelScope.launch {
             val existing = db.userProfileDao().get()
             val timestamp = now()
@@ -345,6 +538,11 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
                     weightKg = ProfileRanges.clampWeight(weightKg),
                     birthYear = LocalDate.now().year - ProfileRanges.clampAge(ageYears),
                     sex = sex,
+                    heightCm = heightCm,
+                    restingHrBpm = restingHrBpm,
+                    // Nicht eingebbar: der hoechste je gemessene Wert gehoert
+                    // der Uhr, nicht der Meinung.
+                    maxHrBpm = existing?.maxHrBpm,
                     meta = existing?.meta?.touched(timestamp) ?: RecordMeta.now(timestamp),
                 ),
             )
@@ -361,7 +559,15 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
         val thisWeekStart = startOfPeriod(today, Period.WEEK)
         val totalHeight = facts.sumOf { it.climbHeightMeters ?: 0.0 }
 
+        val attempts = list.sumOf { it.attemptCount }
+        val activeWeeks = weeks.count { it.sessionCount > 0 }
+
         return DashboardState(
+            flashRate = list.sumOf { it.flashCount }.toDouble().takeIf { attempts > 0 }?.div(attempts),
+            sendRate = list.sumOf { it.sendCount }.toDouble().takeIf { attempts > 0 }?.div(attempts),
+            sessionsPerWeek = list.size.toDouble().takeIf { activeWeeks > 0 }?.div(activeWeeks),
+            recentPulse = fillGaps(weeks, Period.WEEK, count = 8, until = today)
+                .filter { it.hrAvg != null || it.sessionCount == 0 },
             lastSession = list.maxByOrNull { it.startedAt },
             heights = heightTotals(facts, today, zone),
             landmark = Landmarks.compare(totalHeight),
@@ -395,6 +601,25 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * Untergrenzen der fuenf Zonen in Schlaegen.
+     *
+     * Ohne Profil mit den Annahmen aus [Energy] - dieselben, auf denen auch die
+     * Kalorien stehen, damit Zonen und Verbrauch nicht auseinanderlaufen.
+     */
+    private fun zoneBounds(profile: UserProfileEntity?): List<Int> {
+        val body = BodyProfile(
+            weightKg = (profile?.weightKg ?: 70).toDouble(),
+            ageYears = profile?.ageInYears(LocalDate.now()) ?: 30,
+            sex = profile?.sex ?: BiologicalSex.UNSPECIFIED,
+            restingHrBpm = profile?.restingHrBpm,
+            maxHrBpm = profile?.maxHrBpm,
+        )
+        val resting = profile?.restingHrBpm ?: Energy.ASSUMED_RESTING_HR
+        val max = Energy.maxHeartRate(body)
+        return HeartRateZone.entries.drop(1).map { it.lowerBpm(resting, max) }
+    }
+
     private fun now() = System.currentTimeMillis()
 
     private fun Long.toLocalDate(): LocalDate =
@@ -402,6 +627,7 @@ class MobileViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Wie viele Zeitraeume die Historie zeigt - so viel, wie quer lesbar bleibt. */
     private fun slotsFor(period: Period): Int = when (period) {
+        Period.ALL -> 1
         Period.DAY -> 14
         Period.WEEK -> 12
         Period.MONTH -> 12
@@ -413,11 +639,14 @@ private fun SessionSummaryEntity.toFact() = SessionFact(
     startedAt = startedAt,
     attemptCount = attemptCount,
     sendCount = sendCount,
+    flashCount = flashCount,
     climbHeightMeters = climbHeightMeters,
     caloriesTotal = caloriesTotal,
     workMs = workMs,
     totalMs = totalMs,
     hardestSendValue = hardestSendValue,
+    hrAvg = hrAvg,
+    hrMax = hrMax,
 )
 
 private fun AttemptEntity.toFact() = AttemptFact(
